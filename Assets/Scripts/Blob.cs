@@ -36,7 +36,7 @@ public class Blob : MonoBehaviour
         else if (other.CompareTag("Opponent"))
         {
             var otherBlob = other.GetComponent<Blob>();
-            if (otherBlob != null && otherBlob.Size < Size)  // You can only eat smaller opponents
+            if (otherBlob != null && otherBlob.Size < Size)  
             {
                 EatOpponent(otherBlob);
             }
@@ -50,8 +50,8 @@ public class Blob : MonoBehaviour
 
     private void EatOpponent(Blob opponent)
     {
-        Size += opponent.Size; // Increase the player's size by the size of the opponent eaten
-        opponent.Size = 1f; // Reset the opponent's size
+        Size += opponent.Size; 
+        opponent.Size = 1f; 
         opponent.transform.position = new Vector3(0f, 0f, 0f);
     }
 }

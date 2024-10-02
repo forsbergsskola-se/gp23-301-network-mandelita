@@ -82,7 +82,7 @@ public class GameSession : MonoBehaviour
                 var bytes = receiveResult.Buffer;
                 var receivedData = Encoding.UTF8.GetString(bytes);
 
-                var state = JsonUtility.FromJson<PlayerState>(receivedData);  // Deserialize the received player state
+                var state = JsonUtility.FromJson<PlayerState>(receivedData);  
 
                 // Update opponent's position and size
                 EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size);
@@ -135,7 +135,6 @@ public class GameSession : MonoBehaviour
             var bytes = Encoding.UTF8.GetBytes(json);
 
             await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
-            Debug.Log("Position sent to server");
         }
         catch (Exception ex)
         {
