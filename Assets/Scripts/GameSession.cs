@@ -208,28 +208,7 @@ public class GameSession : MonoBehaviour
             yield return null;
         }
     }
-
-
-    private IEnumerator HandleClientCommunication(TcpClient client, IPEndPoint clientEndpoint)
-    {
-        var stream = client.GetStream();
-        var buffer = new byte[1024];
-
-        while (true)
-        {
-            // Wait for data from the client
-            int bytesRead = stream.Read(buffer, 0, buffer.Length);
-            if (bytesRead > 0)
-            {
-                var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                var state = JsonUtility.FromJson<PlayerState>(data);
-                EnsureOpponentAndUpdatePosition(clientEndpoint, state.Position, state.Size);
-            }
-
-            yield return null;
-        }
-    }
-
+    
     
     // Join game as a client using TCP connection
     public static void JoinGame(string hostName)
