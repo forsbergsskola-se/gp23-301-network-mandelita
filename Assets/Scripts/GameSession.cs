@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 
 public class GameSession : MonoBehaviour
 {
@@ -34,14 +35,12 @@ public class GameSession : MonoBehaviour
         DontDestroyOnLoad(go);
         return go.AddComponent<GameSession>();
     }
-
     private static PlayerController SpawnPlayer()
     {
         var prefab = Resources.Load<PlayerController>("Player");
         Debug.Log("Player Spawned");
         return Instantiate(prefab);
     }
-
     private static OpponentController SpawnOpponent()
     {
         var prefab = Resources.Load<OpponentController>("Opponent");
@@ -49,6 +48,103 @@ public class GameSession : MonoBehaviour
         return Instantiate(prefab);
     }
 
+    
+    
+    private async void FixedUpdate()
+    {
+        if (!finishedLoading) return;
+
+        await SendAndReceivePositions();
+    }
+
+    private async Task SendAndReceivePositions()
+    {
+        if (isServer)
+        {
+            await ReceivePositions(); // Server receives positions from clients
+            BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
+        }
+        else
+        {
+            await SendPositionToServer(); // Clients send their position to the server
+            await ReceivePositions(); // Clients receive opponent positions from the server
+        }
+    }
+    
+    private async Task ReceivePositions()
+    {
+        try
+        {
+            while (udpClient.Available > 0)
+            {
+                var receiveResult = await udpClient.ReceiveAsync();
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+                var bytes = receiveResult.Buffer;
+                var receivedData = Encoding.UTF8.GetString(bytes);
+
+                var state = JsonUtility.FromJson<PlayerState>(receivedData);  // Deserialize the received player state
+
+                // Update opponent's position and size
+                EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error receiving positions: " + ex.Message);
+        }
+    }
+    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
+    {
+        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
+        {
+            opponentController = SpawnOpponent(); // Spawn opponent if not found
+            opponents[opponentEndpoint] = opponentController;
+        }
+
+        opponentController.transform.position = opponentPosition;
+        opponentController.GetComponent<Blob>().Size = opponentSize;  
+    }
+    private async Task BroadcastOpponentStates()
+    {
+        foreach (var opponent in opponents)
+        {
+            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
+            var json = JsonUtility.ToJson(state);
+            var bytes = Encoding.UTF8.GetBytes(json);
+        
+            foreach (var endpoint in opponents.Keys)
+            {
+                await udpClient.SendAsync(bytes, bytes.Length, endpoint); // Broadcast to all clients
+            }
+        }
+    }
+    private async Task SendPositionToServer()
+    {
+        if (serverEndpoint == null)
+        {
+            Debug.LogError("Server endpoint is not set.");
+            return;
+        }
+        try
+        {
+            var position = playerController.transform.position;
+            var size = playerController.GetComponent<Blob>().Size;
+
+            var state = new PlayerState(position, size);
+            var json = JsonUtility.ToJson(state);  // Serialize player state
+            var bytes = Encoding.UTF8.GetBytes(json);
+
+            await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+            Debug.Log("Position sent to server");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error sending position to server: " + ex.Message);
+        }
+    }
+
+    
+    // Host Game and listen for connections
     public static void HostGame()
     {
         try
@@ -73,7 +169,6 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error in HostGame: " + ex.Message);
         }
     }
-    
     private IEnumerator Co_AcceptClients()
     {
         while (true)
@@ -87,131 +182,21 @@ public class GameSession : MonoBehaviour
                 yield return null;  // Yield until a client connects
             }
         
-            var tcpClient = task.Result;  // Get the connected TCP client
+            var client = task.Result;  // Get the connected TCP client
             Debug.Log("Client connected via TCP!"); 
 
-            var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
+            var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
             var opponentController = SpawnOpponent(); // Spawn a new opponent for the client
             opponents.TryAdd(clientEndpoint, opponentController); // Add to opponents dictionary if not already present
         
             yield return null;
         }
     }
-    
     private IEnumerator Co_LaunchGame()
     {
         yield return SceneManager.LoadSceneAsync("Game");
         playerController = SpawnPlayer();
         finishedLoading = true;
-    }
-
-    private async void FixedUpdate()
-    {
-        if (!finishedLoading) return;
-        if (isServer)
-            await ReceivePositions();
-        else
-            await SendPositionToServer();
-    }
-    
-    private async Task ReceivePositions()
-    {
-        try
-        {
-            while (udpClient.Available > 0)
-            {
-                var receiveResult = await udpClient.ReceiveAsync();
-                var fromEndpoint = receiveResult.RemoteEndPoint;
-                var bytes = receiveResult.Buffer;
-                var chars = Encoding.UTF8.GetString(bytes);
-
-                var state = JsonUtility.FromJson<PlayerState>(chars);  // Deserialize the received player state
-
-                // Update opponent's position and size
-                EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
-
-                // Broadcast the updated state of all opponents to all clients
-                BroadcastOpponentStates();
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error receiving positions: " + ex.Message);
-        }
-    }
-
-    
-    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
-    {
-        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
-        {
-            opponentController = SpawnOpponent();
-            opponents[opponentEndpoint] = opponentController;
-        }
-        
-        opponentController.transform.position = opponentPosition;
-        opponentController.GetComponent<Blob>().Size = opponentSize;  
-    }
-    
-    private void BroadcastOpponentStates()
-    {
-        foreach (var opponent in opponents)
-        {
-            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
-        
-            var chars = JsonUtility.ToJson(state);  // Serialize the state
-            var bytes = Encoding.UTF8.GetBytes(chars);
-
-            // Broadcast to all connected clients
-            foreach (var endpoint in opponents.Keys)
-            {
-                udpClient.SendAsync(bytes, bytes.Length, endpoint);  // Send updated state to each opponent
-            }
-        }
-    }
-    
-    private async Task SendPositionToServer()
-    {
-        if (serverEndpoint == null)
-        {
-            Debug.LogError("Server endpoint is not set.");
-            return;
-        }
-        try
-        {
-            var position = playerController.transform.position;
-            var size = playerController.GetComponent<Blob>().Size;
-
-            var state = new PlayerState(position, size);
-
-            var chars = JsonUtility.ToJson(state);  // Serialize player state
-            var bytes = Encoding.UTF8.GetBytes(chars);
-
-            await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
-            Debug.Log("Position sent to server");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error sending position to server: " + ex.Message);
-        }
-    }
-
-    
-    public void SendUpdatedStateToClients()
-    {
-        var position = playerController.transform.position;
-        var size = playerController.GetComponent<Blob>().Size;
-
-        var state = new PlayerState(position, size);
-
-        var chars = JsonUtility.ToJson(state);  // Serialize updated state
-        var bytes = Encoding.UTF8.GetBytes(chars);
-    
-        // What's going on here?
-        foreach (var opponent in opponents.Keys)
-        {
-            udpClient.SendAsync(bytes, bytes.Length, opponent);  // Send updated state to each opponent
-        }
     }
     
     
@@ -244,7 +229,6 @@ public class GameSession : MonoBehaviour
         session.StartCoroutine(session.Co_LaunchGame());
 
     }
-
     private IEnumerator Co_ConnectToServer()
     {
         try
@@ -260,8 +244,6 @@ public class GameSession : MonoBehaviour
 
         yield return null;
     }
-    
-
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
         try
@@ -276,19 +258,18 @@ public class GameSession : MonoBehaviour
             throw;
         }
     }
-
 }
 
-
+// Bundle for player position and size
 [Serializable]
 public class PlayerState
 {
-    public Vector3 Position;
-    public float Size;
+    public Vector3 position;
+    public float size;
 
     public PlayerState(Vector3 position, float size)
     {
-        Position = position;
-        Size = size;
+        this.position = position;
+        this.size = size;
     }
 }
