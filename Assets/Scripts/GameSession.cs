@@ -87,7 +87,7 @@ public class GameSession : MonoBehaviour
             }
         
             var tcpClient = task.Result;  // Get the connected TCP client
-            Debug.Log("Client connected via TCP!");
+            Debug.Log("Client connected via TCP!"); // This never happens!!
 
             var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
 
@@ -213,7 +213,7 @@ public class GameSession : MonoBehaviour
         var chars = JsonUtility.ToJson(state);  // Serialize updated state
         var bytes = Encoding.UTF8.GetBytes(chars);
     
-        // Broadcast to all connected clients (you will need to handle this properly)
+        // What's going on here?
         foreach (var opponent in opponents.Keys)
         {
             udpClient.SendAsync(bytes, bytes.Length, opponent);  // Send updated state to each opponent
@@ -228,26 +228,25 @@ public class GameSession : MonoBehaviour
         session.isServer = false;
         try
         {
-            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP
-            Debug.Log("UDP client initialized");
+            session.udpClient = new UdpClient(UDPPortNumber);  
+            Debug.Log("UDP client initialized"); // Initialize UDP OK!
 
         }
         catch (Exception ex)
         {
             Debug.LogError("Error initializing UDP client: " + ex.Message);
         }
-        
         try
         {
             session.tcpClient = new TcpClient();
             session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
-            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
+            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint); // Initialize TCP OK!
         }
         catch (Exception ex)
         {
             Debug.LogError("Error initializing TCP client or resolving server endpoint: " + ex.Message);
         }
-        session.StartCoroutine(session.Co_ConnectToServer(hostName));  // Connect via TCP
+        session.StartCoroutine(session.Co_ConnectToServer(hostName));  
         session.StartCoroutine(session.Co_LaunchGame());
 
     }
@@ -256,18 +255,19 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber);
-            tcpClient.Connect(ipEndPoint);  // Connect to the server via TCP
+            var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber); // Shows correct address!
+            Debug.Log("Attempting to connect to server at " + ipEndPoint + TcpPortNumber);
+            tcpClient.Connect(ipEndPoint);  // Here it fails!!
             Debug.Log("Connected to server via TCP!");
 
-            /*
+            /* Can I really send this before the client has launched the game and has a player?
             // After connecting, send some initial data to the server (e.g., player info)
             var playerInfo = new PlayerState(playerController.transform.position, 1);
             var jsonData = JsonUtility.ToJson(playerInfo);
             var bytes = Encoding.UTF8.GetBytes(jsonData);
 
-            var stream = tcpClient.GetStream();  // Get the network stream to send data
-            stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
+            var stream = tcpClient.GetStream();  
+            stream.Write(bytes, 0, bytes.Length); 
             Debug.Log("Initial data sent to server");
             */
         }
@@ -279,15 +279,13 @@ public class GameSession : MonoBehaviour
         yield return null;
     }
     
-    
-   
 
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
         try
         {
             var address = Dns.GetHostAddresses(hostName).First();
-            Debug.Log("Resolved IP Address for " + hostName + ": " + address);
+            Debug.Log("Resolved host Address for " + hostName); 
             return new IPEndPoint(address, port);
         }
         catch (Exception ex)
