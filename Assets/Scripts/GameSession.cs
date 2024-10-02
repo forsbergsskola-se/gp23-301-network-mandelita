@@ -55,6 +55,19 @@ public class GameSession : MonoBehaviour
             BroadcastOpponentStates();
         }
     }
+    
+    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
+    {
+        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
+        {
+            opponentController = SpawnOpponent();
+            opponents[opponentEndpoint] = opponentController;
+        }
+        
+        opponentController.transform.position = opponentPosition;
+        opponentController.GetComponent<Blob>().Size = opponentSize;  
+    }
+    
     private void BroadcastOpponentStates()
     {
         foreach (var opponent in opponents)
@@ -71,18 +84,6 @@ public class GameSession : MonoBehaviour
             }
         }
     }
-
-    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
-    {
-        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
-        {
-            opponentController = SpawnOpponent();
-            opponents[opponentEndpoint] = opponentController;
-        }
-        
-        opponentController.transform.position = opponentPosition;
-        opponentController.GetComponent<Blob>().Size = opponentSize;  
-    }
     
     private async Task SendPositionToServer()
     {
@@ -97,7 +98,7 @@ public class GameSession : MonoBehaviour
         await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
     }
 
-    
+    /*
     public void SendUpdatedStateToClients()
     {
         var position = playerController.transform.position;
@@ -114,6 +115,7 @@ public class GameSession : MonoBehaviour
             udpClient.SendAsync(bytes, bytes.Length, opponent);  // Send updated state to each opponent
         }
     }
+    */
 
 
     private static GameSession CreateNew()

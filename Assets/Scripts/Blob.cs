@@ -58,7 +58,7 @@ public class Blob : MonoBehaviour
         var gameSession = FindObjectOfType<GameSession>();
         if (gameSession != null && gameSession.isServer)
         {
-            gameSession.SendUpdatedStateToClients(); // Send the updated state to clients
+            //gameSession.SendUpdatedStateToClients(); // Send the updated state to clients
         }   
     }
 }
