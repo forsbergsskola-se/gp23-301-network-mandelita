@@ -15,17 +15,17 @@ public class GameSession : MonoBehaviour
     private const int TcpPortNumber = 44446;
     private bool finishedLoading;
     private PlayerController playerController;
-    private UdpClient udpClient;
-    private TcpListener tcpListener;  // For the server
-    private TcpClient tcpClient;      // For the client
     public bool isServer;
 
     #region ------ Client -------
     private IPEndPoint serverEndpoint;
+    private UdpClient udpClient;
+    private TcpClient tcpClient;   
     #endregion
 
     #region ------ Server -------
     private Dictionary<IPEndPoint, OpponentController> opponents = new();
+    private TcpListener tcpListener;
     #endregion
 
     private async void FixedUpdate()
@@ -52,7 +52,7 @@ public class GameSession : MonoBehaviour
             EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
 
             // Broadcast the updated state of all opponents to all clients
-            BroadcastOpponentStates();
+            //BroadcastOpponentStates();
         }
     }
     
@@ -155,13 +155,29 @@ public class GameSession : MonoBehaviour
     {
         while (true)
         {
+            // Accept a new TCP client connection
             var tcpClient = tcpListener.AcceptTcpClient();  // Block and wait for clients to connect
             Debug.Log("Client connected via TCP!");
         
-            // Logic to register the new client (e.g., add them to the opponents dictionary)
+            // Get the client's IP endpoint (used as the key in the dictionary)
+            var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
+
+            // Spawn a new opponent in the game world
+            var opponentController = SpawnOpponent();  // Assuming you have a method to spawn opponents
+        
+            // Add the opponent to the dictionary, using their endpoint as the key
+            if (!opponents.ContainsKey(clientEndpoint))
+            {
+                opponents.Add(clientEndpoint, opponentController);  // Add the new opponent
+            }
+            else
+            {
+                Debug.LogWarning("Client already connected!");
+            }
             yield return null;
         }
     }
+
 
     // Join game as a client using TCP connection
     public static void JoinGame(string hostName)
