@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 public class GameSession : MonoBehaviour
 {
     private const int UDPPortNumber = 44445;
-    private const int TcpPortNumber = 44446;
+    private const int TcpPortNumber = 44444;
     private bool finishedLoading;
     private PlayerController playerController;
     public bool isServer;
