@@ -4,14 +4,14 @@ using UnityEngine;
 public class Blob : MonoBehaviour
 {
     public Vector2 Direction { get; set; }
-    private float _size = 1f;
+    private float size = 1f;
     public float Size
     {
-        get => _size;
+        get => size;
         set
         {
             transform.localScale = new Vector3(value, value, 1f);
-            _size = value;
+            size = value;
         }
     }
 
@@ -52,13 +52,6 @@ public class Blob : MonoBehaviour
     {
         Size += opponent.Size; // Increase the player's size by the size of the opponent eaten
         opponent.Size = 1f; // Reset the opponent's size
-        // Optionally, you can handle opponent removal or respawning here.
-    
-        // Inform the GameSession to send updated state
-        var gameSession = FindObjectOfType<GameSession>();
-        if (gameSession != null && gameSession.isServer)
-        {
-            gameSession.SendUpdatedStateToClients(); // Send the updated state to clients
-        }   
+        opponent.transform.position = new Vector3(0f, 0f, 0f);
     }
 }
