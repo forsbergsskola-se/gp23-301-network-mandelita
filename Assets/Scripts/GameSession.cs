@@ -8,7 +8,6 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.Serialization;
 
 public class GameSession : MonoBehaviour
 {
@@ -62,7 +61,7 @@ public class GameSession : MonoBehaviour
         if (isServer)
         {
             await ReceivePositions(); // Server receives positions from clients
-            BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
+            await BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
         }
         else
         {
