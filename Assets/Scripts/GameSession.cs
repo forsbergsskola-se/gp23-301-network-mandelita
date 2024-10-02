@@ -47,7 +47,8 @@ public class GameSession : MonoBehaviour
         return Instantiate(prefab);
     }
 
-    
+    //TODO Figure out why the host can see that spawn client and eat it, but doesnt update its position or size,
+    //TODO and why the client does not se and opponent spawned when joining. The host should be there.. 
     
     private async void FixedUpdate()
     {
