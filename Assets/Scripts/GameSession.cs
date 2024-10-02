@@ -84,8 +84,16 @@ public class GameSession : MonoBehaviour
 
                 var state = JsonUtility.FromJson<PlayerState>(receivedData);  
 
-                // Update opponent's position and size
-                EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size);
+                // Check if the message came from the server (host) and ensure opponent representation
+                if (fromEndpoint.Equals(serverEndpoint))
+                {
+                    EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size); // Host update
+                }
+                else
+                {
+                    // Update opponent's position and size
+                    EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size); 
+                }
             }
         }
         catch (Exception ex)
@@ -93,6 +101,7 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
+
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
     {
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
@@ -101,11 +110,24 @@ public class GameSession : MonoBehaviour
             opponents[opponentEndpoint] = opponentController;
         }
 
+        // Update position and size for both host and client opponents
         opponentController.transform.position = opponentPosition;
         opponentController.GetComponent<Blob>().Size = opponentSize;  
     }
+
     private async Task BroadcastOpponentStates()
     {
+        // Include the server/host player state in the broadcast
+        var hostState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
+        var hostJson = JsonUtility.ToJson(hostState);
+        var hostBytes = Encoding.UTF8.GetBytes(hostJson);
+
+        foreach (var endpoint in opponents.Keys)
+        {
+            await udpClient.SendAsync(hostBytes, hostBytes.Length, endpoint); // Send host state to all clients
+        }
+
+        // Send all opponent states as well
         foreach (var opponent in opponents)
         {
             var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
@@ -118,6 +140,7 @@ public class GameSession : MonoBehaviour
             }
         }
     }
+
     private async Task SendPositionToServer()
     {
         if (serverEndpoint == null)
