@@ -58,15 +58,15 @@ public class GameSession : MonoBehaviour
 
     private async Task SendAndReceivePositions()
     {
-        if (isServer)
-        {
-            await ReceivePositions(); // Server receives positions from clients
-            await BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
-        }
-        else
+        if (!isServer)
         {
             await SendPositionToServer(); // Clients send their position to the server
             await ReceivePositions(); // Clients receive opponent positions from the server
+        }
+        else
+        {
+            await ReceivePositions(); // Server receives positions from clients
+            await BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
         }
     }
     
