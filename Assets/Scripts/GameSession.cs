@@ -245,7 +245,7 @@ public class GameSession : MonoBehaviour
         try
         {
             session.tcpClient = new TcpClient();
-            session.serverEndpoint = GetIPEndPoint(hostName, UDPPortNumber);
+            session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
             Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
         }
         catch (Exception ex)
