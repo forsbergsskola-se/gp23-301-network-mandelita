@@ -260,6 +260,7 @@ public class GameSession : MonoBehaviour
             tcpClient.Connect(ipEndPoint);  // Connect to the server via TCP
             Debug.Log("Connected to server via TCP!");
 
+            /*
             // After connecting, send some initial data to the server (e.g., player info)
             var playerInfo = new PlayerState(playerController.transform.position, 1);
             var jsonData = JsonUtility.ToJson(playerInfo);
@@ -268,6 +269,7 @@ public class GameSession : MonoBehaviour
             var stream = tcpClient.GetStream();  // Get the network stream to send data
             stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
             Debug.Log("Initial data sent to server");
+            */
         }
         catch (Exception ex)
         {
