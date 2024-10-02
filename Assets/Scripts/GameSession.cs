@@ -45,6 +45,7 @@ public class GameSession : MonoBehaviour
     private static OpponentController SpawnOpponent()
     {
         var prefab = Resources.Load<OpponentController>("Opponent");
+        Debug.Log("Opponent Spawned");
         return Instantiate(prefab);
     }
 
@@ -87,18 +88,11 @@ public class GameSession : MonoBehaviour
             }
         
             var tcpClient = task.Result;  // Get the connected TCP client
-            Debug.Log("Client connected via TCP!"); // This never happens!!
+            Debug.Log("Client connected via TCP!"); 
 
             var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
-
-            // Spawn a new opponent for the client
-            var opponentController = SpawnOpponent();
-        
-            // Add to opponents dictionary if not already present
-            if (!opponents.ContainsKey(clientEndpoint))
-            {
-                opponents.Add(clientEndpoint, opponentController);
-            }
+            var opponentController = SpawnOpponent(); // Spawn a new opponent for the client
+            opponents.TryAdd(clientEndpoint, opponentController); // Add to opponents dictionary if not already present
         
             yield return null;
         }
@@ -137,7 +131,7 @@ public class GameSession : MonoBehaviour
                 EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
 
                 // Broadcast the updated state of all opponents to all clients
-                //BroadcastOpponentStates();
+                BroadcastOpponentStates();
             }
         }
         catch (Exception ex)
@@ -221,7 +215,7 @@ public class GameSession : MonoBehaviour
     }
     
     
-    // Join game as a client using TCP connection
+    // Join game as a client using TCP connection, connect to server and launch game:
     public static void JoinGame(string hostName)
     {
         var session = CreateNew();
