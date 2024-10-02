@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -52,7 +53,7 @@ public class GameSession : MonoBehaviour
             EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
 
             // Broadcast the updated state of all opponents to all clients
-            //BroadcastOpponentStates();
+            BroadcastOpponentStates();
         }
     }
     
@@ -97,8 +98,7 @@ public class GameSession : MonoBehaviour
     
         await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
     }
-
-    /*
+    
     public void SendUpdatedStateToClients()
     {
         var position = playerController.transform.position;
@@ -115,9 +115,7 @@ public class GameSession : MonoBehaviour
             udpClient.SendAsync(bytes, bytes.Length, opponent);  // Send updated state to each opponent
         }
     }
-    */
-
-
+    
     private static GameSession CreateNew()
     {
         var go = new GameObject("GameSession");
@@ -150,35 +148,53 @@ public class GameSession : MonoBehaviour
         session.StartCoroutine(session.Co_LaunchGame());
     }
 
-    // Coroutine to accept incoming TCP client connections
     private IEnumerator Co_AcceptClients()
     {
         while (true)
         {
-            // Accept a new TCP client connection
-            var tcpClient = tcpListener.AcceptTcpClient();  // Block and wait for clients to connect
+            var tcpClient = tcpListener.AcceptTcpClient();  // Accept new client connection
             Debug.Log("Client connected via TCP!");
         
-            // Get the client's IP endpoint (used as the key in the dictionary)
+            // Get the client's IP endpoint
             var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
-
-            // Spawn a new opponent in the game world
-            var opponentController = SpawnOpponent();  // Assuming you have a method to spawn opponents
         
-            // Add the opponent to the dictionary, using their endpoint as the key
+            // Spawn a new opponent for the client
+            var opponentController = SpawnOpponent();
+        
+            // Add the opponent to the dictionary, if not already present
             if (!opponents.ContainsKey(clientEndpoint))
             {
-                opponents.Add(clientEndpoint, opponentController);  // Add the new opponent
+                opponents.Add(clientEndpoint, opponentController);  // Add new opponent
             }
-            else
-            {
-                Debug.LogWarning("Client already connected!");
-            }
+
+            // Start a coroutine or handle communication with this client (e.g., receive messages)
+            StartCoroutine(HandleClientCommunication(tcpClient, clientEndpoint));
+        
             yield return null;
         }
     }
 
+    private IEnumerator HandleClientCommunication(TcpClient client, IPEndPoint clientEndpoint)
+    {
+        var stream = client.GetStream();
+        var buffer = new byte[1024];
 
+        while (true)
+        {
+            // Wait for data from the client
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            if (bytesRead > 0)
+            {
+                var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                var state = JsonUtility.FromJson<PlayerState>(data);
+                EnsureOpponentAndUpdatePosition(clientEndpoint, state.Position, state.Size);
+            }
+
+            yield return null;
+        }
+    }
+
+    
     // Join game as a client using TCP connection
     public static void JoinGame(string hostName)
     {
@@ -191,16 +207,24 @@ public class GameSession : MonoBehaviour
         session.StartCoroutine(session.Co_LaunchGame());
     }
 
-    // Coroutine to connect to server via TCP
     private IEnumerator Co_ConnectToServer(string hostName)
     {
         var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber);
         tcpClient.Connect(ipEndPoint);  // Connect to the server via TCP
         Debug.Log("Connected to server via TCP!");
-        // Handle further logic after connection is established
+
+        // After connecting, send some initial data to the server (e.g., player info)
+        var playerInfo = new PlayerState(playerController.transform.position, 1);
+        var jsonData = JsonUtility.ToJson(playerInfo);
+        var bytes = Encoding.UTF8.GetBytes(jsonData);
+
+        var stream = tcpClient.GetStream();  // Get the network stream to send data
+        stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
+
         yield return null;
     }
 
+    
     private IEnumerator Co_LaunchGame()
     {
         yield return SceneManager.LoadSceneAsync("Game");
@@ -214,6 +238,7 @@ public class GameSession : MonoBehaviour
         return new IPEndPoint(address, port);
     }
 }
+
 
 [Serializable]
 public class PlayerState
