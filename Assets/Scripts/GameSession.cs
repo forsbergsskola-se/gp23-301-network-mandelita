@@ -137,7 +137,7 @@ public class GameSession : MonoBehaviour
                 EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
 
                 // Broadcast the updated state of all opponents to all clients
-                BroadcastOpponentStates();
+                //BroadcastOpponentStates();
             }
         }
         catch (Exception ex)
@@ -246,30 +246,18 @@ public class GameSession : MonoBehaviour
         {
             Debug.LogError("Error initializing TCP client or resolving server endpoint: " + ex.Message);
         }
-        session.StartCoroutine(session.Co_ConnectToServer(hostName));  
+        session.StartCoroutine(session.Co_ConnectToServer());  
         session.StartCoroutine(session.Co_LaunchGame());
 
     }
 
-    private IEnumerator Co_ConnectToServer(string hostName)
+    private IEnumerator Co_ConnectToServer()
     {
         try
         {
-            // var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber); // Shows correct address!
             Debug.Log("Attempting to connect to server at " + serverEndpoint);
             tcpClient.Connect(serverEndpoint);  // Here it fails!!
             Debug.Log("Connected to server via TCP!");
-
-            /* Can I really send this before the client has launched the game and has a player?
-            // After connecting, send some initial data to the server (e.g., player info)
-            var playerInfo = new PlayerState(playerController.transform.position, 1);
-            var jsonData = JsonUtility.ToJson(playerInfo);
-            var bytes = Encoding.UTF8.GetBytes(jsonData);
-
-            var stream = tcpClient.GetStream();  
-            stream.Write(bytes, 0, bytes.Length); 
-            Debug.Log("Initial data sent to server");
-            */
         }
         catch (Exception ex)
         {
