@@ -28,6 +28,92 @@ public class GameSession : MonoBehaviour
     private Dictionary<IPEndPoint, OpponentController> opponents = new();
     private TcpListener tcpListener;
     #endregion
+    
+    private static GameSession CreateNew()
+    {
+        var go = new GameObject("GameSession");
+        DontDestroyOnLoad(go);
+        return go.AddComponent<GameSession>();
+    }
+
+    private static PlayerController SpawnPlayer()
+    {
+        var prefab = Resources.Load<PlayerController>("Player");
+        Debug.Log("Player Spawned");
+        return Instantiate(prefab);
+    }
+
+    private static OpponentController SpawnOpponent()
+    {
+        var prefab = Resources.Load<OpponentController>("Opponent");
+        return Instantiate(prefab);
+    }
+
+    public static void HostGame()
+    {
+        try
+        {
+            var session = CreateNew();  // Creates the GameSession object
+            session.isServer = true;
+
+            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP listener
+            Debug.Log("UDP Listener started on port " + UDPPortNumber);
+
+            session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  // Initialize TCP listener
+            session.tcpListener.Start();  // Start listening for TCP clients
+            Debug.Log("TCP Listener started on port " + TcpPortNumber);
+
+            session.StartCoroutine(session.Co_AcceptClients());  // Coroutine to accept clients via TCP
+            session.StartCoroutine(session.Co_LaunchGame());     // Launch the game scene
+
+            Debug.Log("HostGame successfully started");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error in HostGame: " + ex.Message);
+        }
+    }
+    
+    private IEnumerator Co_AcceptClients()
+    {
+        while (true)
+        {
+            Debug.Log("Waiting for TCP clients to connect...");
+        
+            // Use async method to prevent blocking the main thread
+            var task = tcpListener.AcceptTcpClientAsync();  // Non-blocking
+            while (!task.IsCompleted)
+            {
+                yield return null;  // Yield until a client connects
+            }
+        
+            var tcpClient = task.Result;  // Get the connected TCP client
+            Debug.Log("Client connected via TCP!");
+
+            var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
+
+            // Spawn a new opponent for the client
+            var opponentController = SpawnOpponent();
+        
+            // Add to opponents dictionary if not already present
+            if (!opponents.ContainsKey(clientEndpoint))
+            {
+                opponents.Add(clientEndpoint, opponentController);
+            }
+        
+            yield return null;
+        }
+    }
+    
+    private IEnumerator Co_LaunchGame()
+    {
+        yield return SceneManager.LoadSceneAsync("Game");
+        playerController = SpawnPlayer();
+        finishedLoading = true;
+    }
+    
+   
+    
 
     private async void FixedUpdate()
     {
@@ -37,7 +123,7 @@ public class GameSession : MonoBehaviour
         else
             await SendPositionToServer();
     }
-
+    
     private async Task ReceivePositions()
     {
         try
@@ -133,81 +219,11 @@ public class GameSession : MonoBehaviour
         }
     }
     
-    private static GameSession CreateNew()
-    {
-        var go = new GameObject("GameSession");
-        DontDestroyOnLoad(go);
-        return go.AddComponent<GameSession>();
-    }
 
-    private static PlayerController SpawnPlayer()
-    {
-        var prefab = Resources.Load<PlayerController>("Player");
-        Debug.Log("Player Spawned");
-        return Instantiate(prefab);
-    }
 
-    private static OpponentController SpawnOpponent()
-    {
-        var prefab = Resources.Load<OpponentController>("Opponent");
-        return Instantiate(prefab);
-    }
-
-    public static void HostGame()
-    {
-        try
-        {
-            var session = CreateNew();  // Creates the GameSession object
-            session.isServer = true;
-
-            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP listener
-            Debug.Log("UDP Listener started on port " + UDPPortNumber);
-
-            session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  // Initialize TCP listener
-            session.tcpListener.Start();  // Start listening for TCP clients
-            Debug.Log("TCP Listener started on port " + TcpPortNumber);
-
-            session.StartCoroutine(session.Co_AcceptClients());  // Coroutine to accept clients via TCP
-            session.StartCoroutine(session.Co_LaunchGame());     // Launch the game scene
-
-            Debug.Log("HostGame successfully started");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error in HostGame: " + ex.Message);
-        }
-    }
+   
     
-    private IEnumerator Co_AcceptClients()
-    {
-        while (true)
-        {
-            Debug.Log("Waiting for TCP clients to connect...");
-        
-            // Use async method to prevent blocking the main thread
-            var task = tcpListener.AcceptTcpClientAsync();  // Non-blocking
-            while (!task.IsCompleted)
-            {
-                yield return null;  // Yield until a client connects
-            }
-        
-            var tcpClient = task.Result;  // Get the connected TCP client
-            Debug.Log("Client connected via TCP!");
-
-            var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
-
-            // Spawn a new opponent for the client
-            var opponentController = SpawnOpponent();
-        
-            // Add to opponents dictionary if not already present
-            if (!opponents.ContainsKey(clientEndpoint))
-            {
-                opponents.Add(clientEndpoint, opponentController);
-            }
-        
-            yield return null;
-        }
-    }
+   
     
     
     // Join game as a client using TCP connection
@@ -266,12 +282,7 @@ public class GameSession : MonoBehaviour
         yield return null;
     }
     
-    private IEnumerator Co_LaunchGame()
-    {
-        yield return SceneManager.LoadSceneAsync("Game");
-        playerController = SpawnPlayer();
-        finishedLoading = true;
-    }
+   
 
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
