@@ -217,17 +217,28 @@ public class GameSession : MonoBehaviour
         session.isServer = false;
         try
         {
-            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP listener
-            Debug.Log("UDP listener started on port " + UDPPortNumber);
+            session.udpClient = new UdpClient();  // Initialize UDP without binding to a specific port
+            Debug.Log("UDP client initialized without specific port");
+
         }
         catch (Exception ex)
         {
             Debug.LogError("Error initializing UDP client: " + ex.Message);
         }
-        session.tcpClient = new TcpClient();  // Initialize TCP client
-        session.serverEndpoint = GetIPEndPoint(hostName, UDPPortNumber);
+        
+        try
+        {
+            session.tcpClient = new TcpClient();
+            session.serverEndpoint = GetIPEndPoint(hostName, UDPPortNumber);
+            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error initializing TCP client or resolving server endpoint: " + ex.Message);
+        }
         session.StartCoroutine(session.Co_ConnectToServer(hostName));  // Connect via TCP
         session.StartCoroutine(session.Co_LaunchGame());
+
     }
 
     private IEnumerator Co_ConnectToServer(string hostName)
@@ -245,6 +256,7 @@ public class GameSession : MonoBehaviour
 
             var stream = tcpClient.GetStream();  // Get the network stream to send data
             stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
+            Debug.Log("Initial data sent to server");
         }
         catch (Exception ex)
         {
@@ -253,8 +265,6 @@ public class GameSession : MonoBehaviour
 
         yield return null;
     }
-
-
     
     private IEnumerator Co_LaunchGame()
     {
@@ -265,9 +275,19 @@ public class GameSession : MonoBehaviour
 
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
-        var address = Dns.GetHostAddresses(hostName).First();
-        return new IPEndPoint(address, port);
+        try
+        {
+            var address = Dns.GetHostAddresses(hostName).First();
+            Debug.Log("Resolved IP Address for " + hostName + ": " + address);
+            return new IPEndPoint(address, port);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error resolving IP address for " + hostName + ": " + ex.Message);
+            throw;
+        }
     }
+
 }
 
 
