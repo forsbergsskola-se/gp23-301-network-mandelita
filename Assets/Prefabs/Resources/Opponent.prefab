@@ -52,6 +52,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7394048332795807170, guid: 353bbe1538d4b49f784e293e31bd587f, type: 3}
+      propertyPath: m_Constraints
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8127883686532028336, guid: 353bbe1538d4b49f784e293e31bd587f, type: 3}
       propertyPath: m_Name
       value: Opponent
