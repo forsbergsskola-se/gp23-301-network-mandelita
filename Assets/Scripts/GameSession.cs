@@ -255,9 +255,9 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber); // Shows correct address!
-            Debug.Log("Attempting to connect to server at " + ipEndPoint + TcpPortNumber);
-            tcpClient.Connect(ipEndPoint);  // Here it fails!!
+            // var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber); // Shows correct address!
+            Debug.Log("Attempting to connect to server at " + serverEndpoint);
+            tcpClient.Connect(serverEndpoint);  // Here it fails!!
             Debug.Log("Connected to server via TCP!");
 
             /* Can I really send this before the client has launched the game and has a player?
