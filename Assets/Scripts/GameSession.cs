@@ -88,11 +88,13 @@ public class GameSession : MonoBehaviour
                 if (fromEndpoint.Equals(serverEndpoint))
                 {
                     EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size); // Host update
+                    Debug.Log("Host Update");
                 }
                 else
                 {
                     // Update opponent's position and size
                     EnsureOpponentAndUpdatePosition(fromEndpoint, state.position, state.size); 
+                    Debug.Log("Client Update");
                 }
             }
         }
@@ -156,7 +158,7 @@ public class GameSession : MonoBehaviour
             var state = new PlayerState(position, size);
             var json = JsonUtility.ToJson(state);  // Serialize player state
             var bytes = Encoding.UTF8.GetBytes(json);
-
+            Debug.Log("Client sent position...");
             await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
         }
         catch (Exception ex)
