@@ -228,8 +228,8 @@ public class GameSession : MonoBehaviour
         session.isServer = false;
         try
         {
-            session.udpClient = new UdpClient();  // Initialize UDP without binding to a specific port
-            Debug.Log("UDP client initialized without specific port");
+            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP
+            Debug.Log("UDP client initialized");
 
         }
         catch (Exception ex)
