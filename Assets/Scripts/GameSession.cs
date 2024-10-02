@@ -6,14 +6,13 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class GameSession : MonoBehaviour
 {
     private const int UDPPortNumber = 44445;
-    private const int TcpPortNumber = 44444;
+    private const int TcpPortNumber = 44446;
     private bool finishedLoading;
     private PlayerController playerController;
     public bool isServer;
@@ -111,9 +110,6 @@ public class GameSession : MonoBehaviour
         playerController = SpawnPlayer();
         finishedLoading = true;
     }
-    
-   
-    
 
     private async void FixedUpdate()
     {
@@ -182,6 +178,11 @@ public class GameSession : MonoBehaviour
     
     private async Task SendPositionToServer()
     {
+        if (serverEndpoint == null)
+        {
+            Debug.LogError("Server endpoint is not set.");
+            return;
+        }
         try
         {
             var position = playerController.transform.position;
@@ -218,12 +219,6 @@ public class GameSession : MonoBehaviour
             udpClient.SendAsync(bytes, bytes.Length, opponent);  // Send updated state to each opponent
         }
     }
-    
-
-
-   
-    
-   
     
     
     // Join game as a client using TCP connection
@@ -281,6 +276,7 @@ public class GameSession : MonoBehaviour
 
         yield return null;
     }
+    
     
    
 
