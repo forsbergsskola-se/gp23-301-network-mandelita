@@ -40,22 +40,30 @@ public class GameSession : MonoBehaviour
 
     private async Task ReceivePositions()
     {
-        while (udpClient.Available > 0)
+        try
         {
-            var receiveResult = await udpClient.ReceiveAsync();
-            var fromEndpoint = receiveResult.RemoteEndPoint;
-            var bytes = receiveResult.Buffer;
-            var chars = Encoding.UTF8.GetString(bytes);
-    
-            var state = JsonUtility.FromJson<PlayerState>(chars);  // Deserialize the received player state
+            while (udpClient.Available > 0)
+            {
+                var receiveResult = await udpClient.ReceiveAsync();
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+                var bytes = receiveResult.Buffer;
+                var chars = Encoding.UTF8.GetString(bytes);
 
-            // Update opponent's position and size
-            EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
+                var state = JsonUtility.FromJson<PlayerState>(chars);  // Deserialize the received player state
 
-            // Broadcast the updated state of all opponents to all clients
-            BroadcastOpponentStates();
+                // Update opponent's position and size
+                EnsureOpponentAndUpdatePosition(fromEndpoint, state.Position, state.Size);
+
+                // Broadcast the updated state of all opponents to all clients
+                BroadcastOpponentStates();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
+
     
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 opponentPosition, float opponentSize)
     {
@@ -88,16 +96,25 @@ public class GameSession : MonoBehaviour
     
     private async Task SendPositionToServer()
     {
-        var position = playerController.transform.position;
-        var size = playerController.GetComponent<Blob>().Size;
+        try
+        {
+            var position = playerController.transform.position;
+            var size = playerController.GetComponent<Blob>().Size;
 
-        var state = new PlayerState(position, size);
+            var state = new PlayerState(position, size);
 
-        var chars = JsonUtility.ToJson(state);  // Serialize player state
-        var bytes = Encoding.UTF8.GetBytes(chars);
-    
-        await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+            var chars = JsonUtility.ToJson(state);  // Serialize player state
+            var bytes = Encoding.UTF8.GetBytes(chars);
+
+            await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+            Debug.Log("Position sent to server");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error sending position to server: " + ex.Message);
+        }
     }
+
     
     public void SendUpdatedStateToClients()
     {
@@ -136,43 +153,62 @@ public class GameSession : MonoBehaviour
         return Instantiate(prefab);
     }
 
-    // Host game with TCP listener for new connections
     public static void HostGame()
     {
-        var session = CreateNew();
-        session.isServer = true;
-        session.udpClient = new UdpClient(UDPPortNumber);
-        session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  // Start TCP listener
-        session.tcpListener.Start();
-        session.StartCoroutine(session.Co_AcceptClients());  // Accept clients via TCP
-        session.StartCoroutine(session.Co_LaunchGame());
-    }
+        try
+        {
+            var session = CreateNew();  // Creates the GameSession object
+            session.isServer = true;
 
+            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP listener
+            Debug.Log("UDP Listener started on port " + UDPPortNumber);
+
+            session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  // Initialize TCP listener
+            session.tcpListener.Start();  // Start listening for TCP clients
+            Debug.Log("TCP Listener started on port " + TcpPortNumber);
+
+            session.StartCoroutine(session.Co_AcceptClients());  // Coroutine to accept clients via TCP
+            session.StartCoroutine(session.Co_LaunchGame());     // Launch the game scene
+
+            Debug.Log("HostGame successfully started");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error in HostGame: " + ex.Message);
+        }
+    }
+    
     private IEnumerator Co_AcceptClients()
     {
         while (true)
         {
-            var tcpClient = tcpListener.AcceptTcpClient();  // Accept new client connection
+            Debug.Log("Waiting for TCP clients to connect...");
+        
+            // Use async method to prevent blocking the main thread
+            var task = tcpListener.AcceptTcpClientAsync();  // Non-blocking
+            while (!task.IsCompleted)
+            {
+                yield return null;  // Yield until a client connects
+            }
+        
+            var tcpClient = task.Result;  // Get the connected TCP client
             Debug.Log("Client connected via TCP!");
-        
-            // Get the client's IP endpoint
+
             var clientEndpoint = (IPEndPoint)tcpClient.Client.RemoteEndPoint;
-        
+
             // Spawn a new opponent for the client
             var opponentController = SpawnOpponent();
         
-            // Add the opponent to the dictionary, if not already present
+            // Add to opponents dictionary if not already present
             if (!opponents.ContainsKey(clientEndpoint))
             {
-                opponents.Add(clientEndpoint, opponentController);  // Add new opponent
+                opponents.Add(clientEndpoint, opponentController);
             }
-
-            // Start a coroutine or handle communication with this client (e.g., receive messages)
-            StartCoroutine(HandleClientCommunication(tcpClient, clientEndpoint));
         
             yield return null;
         }
     }
+
 
     private IEnumerator HandleClientCommunication(TcpClient client, IPEndPoint clientEndpoint)
     {
@@ -200,7 +236,15 @@ public class GameSession : MonoBehaviour
     {
         var session = CreateNew();
         session.isServer = false;
-        session.udpClient = new UdpClient();
+        try
+        {
+            session.udpClient = new UdpClient(UDPPortNumber);  // Initialize UDP listener
+            Debug.Log("UDP listener started on port " + UDPPortNumber);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error initializing UDP client: " + ex.Message);
+        }
         session.tcpClient = new TcpClient();  // Initialize TCP client
         session.serverEndpoint = GetIPEndPoint(hostName, UDPPortNumber);
         session.StartCoroutine(session.Co_ConnectToServer(hostName));  // Connect via TCP
@@ -209,20 +253,28 @@ public class GameSession : MonoBehaviour
 
     private IEnumerator Co_ConnectToServer(string hostName)
     {
-        var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber);
-        tcpClient.Connect(ipEndPoint);  // Connect to the server via TCP
-        Debug.Log("Connected to server via TCP!");
+        try
+        {
+            var ipEndPoint = GetIPEndPoint(hostName, TcpPortNumber);
+            tcpClient.Connect(ipEndPoint);  // Connect to the server via TCP
+            Debug.Log("Connected to server via TCP!");
 
-        // After connecting, send some initial data to the server (e.g., player info)
-        var playerInfo = new PlayerState(playerController.transform.position, 1);
-        var jsonData = JsonUtility.ToJson(playerInfo);
-        var bytes = Encoding.UTF8.GetBytes(jsonData);
+            // After connecting, send some initial data to the server (e.g., player info)
+            var playerInfo = new PlayerState(playerController.transform.position, 1);
+            var jsonData = JsonUtility.ToJson(playerInfo);
+            var bytes = Encoding.UTF8.GetBytes(jsonData);
 
-        var stream = tcpClient.GetStream();  // Get the network stream to send data
-        stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
+            var stream = tcpClient.GetStream();  // Get the network stream to send data
+            stream.Write(bytes, 0, bytes.Length);  // Send data via TCP (no async needed in a coroutine)
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error connecting to server: " + ex.Message);
+        }
 
         yield return null;
     }
+
 
     
     private IEnumerator Co_LaunchGame()
