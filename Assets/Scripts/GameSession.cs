@@ -256,7 +256,7 @@ public class GameSession : MonoBehaviour
         try
         {
             Debug.Log("Attempting to connect to server at " + serverEndpoint);
-            tcpClient.Connect(serverEndpoint);  // Here it fails!!
+            tcpClient.Connect(serverEndpoint);  
             Debug.Log("Connected to server via TCP!");
         }
         catch (Exception ex)
