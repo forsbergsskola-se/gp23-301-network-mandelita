@@ -173,8 +173,7 @@ public class GameSession : MonoBehaviour
 
             session.StartCoroutine(session.Co_AcceptClients());  // Accept clients via TCP
             session.StartCoroutine(session.Co_LaunchGame());     // Launch the game scene
-
-            Debug.Log("Host player added to players dictionary");
+            
             Debug.Log("HostGame successfully started");
         }
         catch (Exception ex)
