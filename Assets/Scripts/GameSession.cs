@@ -82,6 +82,7 @@ public class GameSession : MonoBehaviour
                 var fromEndpoint = receiveResult.RemoteEndPoint;
                 var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
                 var state = JsonUtility.FromJson<PlayerState>(receivedData);  
+                Debug.Log("Receive data");
 
                 EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size); 
             }
@@ -102,12 +103,12 @@ public class GameSession : MonoBehaviour
 
         playerController.transform.position = playerPosition;
         playerController.GetComponent<Blob>().Size = playerSize;  
+        Debug.Log("Update positions");
     }
 
     // Broadcasts the server's and players' states to all clients
     private async Task BroadcastPlayerStates()
     {
-        /*
         var hostState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
         var hostJson = JsonUtility.ToJson(hostState);
         var hostBytes = Encoding.UTF8.GetBytes(hostJson);
@@ -116,7 +117,6 @@ public class GameSession : MonoBehaviour
         {
             await udpClient.SendAsync(hostBytes, hostBytes.Length, endpoint); // Send host state to all clients
         }
-        */
 
         foreach (var opponent in opponents)
         {
@@ -127,6 +127,7 @@ public class GameSession : MonoBehaviour
             foreach (var endpoint in opponents.Keys)
             {
                 await udpClient.SendAsync(bytes, bytes.Length, endpoint); // Broadcast to all clients
+                Debug.Log("Broadcast");
             }
         }
     }
