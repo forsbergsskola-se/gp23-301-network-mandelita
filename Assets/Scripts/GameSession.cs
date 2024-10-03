@@ -76,22 +76,29 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            while (udpClient.Available > 0)
+            while (true) // Run continuously to check for packets
             {
+                // Wait for incoming data
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
                 var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
-                var state = JsonUtility.FromJson<PlayerState>(receivedData);  
-                Debug.Log("Receive data");
+                var state = JsonUtility.FromJson<PlayerState>(receivedData);
+                Debug.Log("Received data from: " + fromEndpoint);
 
-                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size); 
+                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
             }
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+        {
+            // No data available
+            await Task.Delay(100); // Short delay before next check
         }
         catch (Exception ex)
         {
             Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
+
     
     private void EnsurePlayerAndUpdatePosition(IPEndPoint playerEndpoint, Vector3 playerPosition, float playerSize)
     {
