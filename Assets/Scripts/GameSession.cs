@@ -71,26 +71,30 @@ public class GameSession : MonoBehaviour
         }
     }
     
-    // Receives positions from clients or server
     private async Task ReceivePositions()
     {
         try
         {
             while (true) // Run continuously to check for packets
             {
-                // Wait for incoming data
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
                 var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+                if (string.IsNullOrEmpty(receivedData))
+                {
+                    Debug.LogWarning("Received empty data from: " + fromEndpoint);
+                    continue; // Skip empty data
+                }
+
                 var state = JsonUtility.FromJson<PlayerState>(receivedData);
-                Debug.Log("Received data from: " + fromEndpoint);
+                Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
 
                 EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
             }
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
         {
-            // No data available
             await Task.Delay(100); // Short delay before next check
         }
         catch (Exception ex)
@@ -98,6 +102,7 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
+
 
     
     private void EnsurePlayerAndUpdatePosition(IPEndPoint playerEndpoint, Vector3 playerPosition, float playerSize)
