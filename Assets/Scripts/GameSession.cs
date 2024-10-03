@@ -48,7 +48,7 @@ public class GameSession : MonoBehaviour
     }
 
     //TODO Figure out why the host can see that spawn client and eat it, but doesnt update its position or size,
-    //TODO and why the client does not se and opponent spawned when joining. The host should be there.. 
+    //TODO and why the client does not see and opponent spawned when joining. The host should be there.. 
     
     private async void FixedUpdate()
     {
@@ -62,7 +62,7 @@ public class GameSession : MonoBehaviour
         if (isServer)
         {
             await ReceivePositions(); // Server receives positions from clients
-            BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
+            await BroadcastOpponentStates(); // Server then broadcasts opponent positions to all clients
         }
         else
         {
@@ -195,27 +195,27 @@ public class GameSession : MonoBehaviour
     }
     private IEnumerator Co_AcceptClients()
     {
-        while (true)
+        Debug.Log("Waiting for TCP clients to connect...");
+    
+        // Use async method to prevent blocking the main thread
+        var task = tcpListener.AcceptTcpClientAsync();  // Non-blocking
+        while (!task.IsCompleted)
         {
-            Debug.Log("Waiting for TCP clients to connect...");
-        
-            // Use async method to prevent blocking the main thread
-            var task = tcpListener.AcceptTcpClientAsync();  // Non-blocking
-            while (!task.IsCompleted)
-            {
-                yield return null;  // Yield until a client connects
-            }
-        
-            var client = task.Result;  // Get the connected TCP client
-            Debug.Log("Client connected via TCP!"); 
-
-            var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
-            var opponentController = SpawnOpponent(); // Spawn a new opponent for the client
-            opponents.TryAdd(clientEndpoint, opponentController); // Add to opponents dictionary if not already present
-        
-            yield return null;
+            yield return null;  // Yield until a client connects
         }
+
+        var client = task.Result;  // Get the connected TCP client
+        Debug.Log("Client connected via TCP!"); 
+
+        var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
+        var opponentController = SpawnOpponent();  // Spawn a new opponent for the client
+        opponents.TryAdd(clientEndpoint, opponentController);  // Add to opponents dictionary
+    
+        Debug.Log("Opponent spawned and added to the game!");
+        
+        yield return null;  
     }
+
     private IEnumerator Co_LaunchGame()
     {
         yield return SceneManager.LoadSceneAsync("Game");
