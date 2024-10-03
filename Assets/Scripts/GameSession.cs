@@ -28,23 +28,20 @@ public class GameSession : MonoBehaviour
     private TcpListener tcpListener;
     #endregion
     
-    // Helper to create a new game session
     private static GameSession CreateNew()
     {
         var go = new GameObject("GameSession");
         DontDestroyOnLoad(go);
         return go.AddComponent<GameSession>();
     }
-
-    // Spawns a new player
+    
     private static PlayerController SpawnPlayer()
     {
         var prefab = Resources.Load<PlayerController>("Player");
         Debug.Log("Player Spawned");
         return Instantiate(prefab);
     }
-
-    // Spawns a new opponent
+    
     private static OpponentController SpawnOpponent()
     {
         var prefab = Resources.Load<OpponentController>("Opponent");
@@ -65,12 +62,12 @@ public class GameSession : MonoBehaviour
         if (isServer)
         {
             await ReceivePositions(); // Server receives positions from clients
-            await BroadcastPlayerStates(); // Server then broadcasts player positions to all clients
+            await BroadcastPlayerStates(); // Server then broadcasts all positions to all clients
         }
         else
         {
             await SendPositionToServer(); // Clients send their position to the server
-            await ReceivePositions(); // Clients receive player positions from the server
+            await ReceivePositions(); // Clients receive opponent positions from the server
         }
     }
     
@@ -94,13 +91,12 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
-
-    // Ensures a player is spawned and updates their position
+    
     private void EnsurePlayerAndUpdatePosition(IPEndPoint playerEndpoint, Vector3 playerPosition, float playerSize)
     {
         if (!opponents.TryGetValue(playerEndpoint, out var playerController))
         {
-            playerController = SpawnOpponent(); // Spawn player if not found
+            playerController = SpawnOpponent(); // Spawn opponent if not found
             opponents[playerEndpoint] = playerController;
         }
 
@@ -111,6 +107,7 @@ public class GameSession : MonoBehaviour
     // Broadcasts the server's and players' states to all clients
     private async Task BroadcastPlayerStates()
     {
+        /*
         var hostState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
         var hostJson = JsonUtility.ToJson(hostState);
         var hostBytes = Encoding.UTF8.GetBytes(hostJson);
@@ -119,10 +116,11 @@ public class GameSession : MonoBehaviour
         {
             await udpClient.SendAsync(hostBytes, hostBytes.Length, endpoint); // Send host state to all clients
         }
+        */
 
-        foreach (var player in opponents)
+        foreach (var opponent in opponents)
         {
-            var state = new PlayerState(player.Value.transform.position, player.Value.GetComponent<Blob>().Size);
+            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
             var json = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(json);
         
@@ -149,8 +147,8 @@ public class GameSession : MonoBehaviour
             var state = new PlayerState(position, size);
             var json = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(json);
-            Debug.Log("Client sent position...");
             await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+            Debug.Log("Client sent position...");
         }
         catch (Exception ex)
         {
@@ -202,8 +200,6 @@ public class GameSession : MonoBehaviour
         var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
         var opponentController = SpawnOpponent();
         opponents[clientEndpoint] = opponentController;
-
-        Debug.Log("Opponent spawned and added to the game!");
         
         yield return null;  
     }
