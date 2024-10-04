@@ -28,7 +28,6 @@ public class GameSession : MonoBehaviour
     private Dictionary<IPEndPoint, OpponentController> opponents = new();
     private List<IPEndPoint> clients = new();
     private TcpListener tcpListener;
-    private static string hostIP;
     #endregion
 
  
@@ -66,6 +65,7 @@ public class GameSession : MonoBehaviour
     
     private async Task ReceivePositions()
     {
+        Debug.Log("Server listening for positions...");
         while (udpClient.Available > 0)
         {
             var receiveResult = await udpClient.ReceiveAsync();
@@ -200,7 +200,6 @@ public class GameSession : MonoBehaviour
     {
         var session = CreateNew();
         session.isServer = false;
-        GameSession.hostIP = hostName;
 
         try
         {
