@@ -59,13 +59,16 @@ public class GameSession : MonoBehaviour
     // Handles both sending and receiving player positions
     private async Task SendAndReceivePositions()
     {
+        Debug.Log("Update:");
         if (isServer)
         {
+            Debug.Log("Server");
             await ReceivePositions(); // Server receives positions from clients
             await BroadcastPlayerStates(); // Server then broadcasts all positions to all clients
         }
         else
         {
+            Debug.Log("Client");
             await SendPositionToServer(); // Clients send their position to the server
             await ReceivePositions(); // Clients receive opponent positions from the server
         }
