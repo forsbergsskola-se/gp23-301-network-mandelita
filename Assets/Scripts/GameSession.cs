@@ -29,21 +29,23 @@ public class GameSession : MonoBehaviour
     private TcpListener tcpListener;
     private static string hostIP;
     #endregion
-    
+
+    private bool isCoroutineStarted = false;
+
     private static GameSession CreateNew()
     {
         var go = new GameObject("GameSession");
         DontDestroyOnLoad(go);
         return go.AddComponent<GameSession>();
     }
-    
+
     private static PlayerController SpawnPlayer()
     {
         var prefab = Resources.Load<PlayerController>("Player");
         Debug.Log("Player Spawned");
         return Instantiate(prefab);
     }
-    
+
     private static OpponentController SpawnOpponent()
     {
         var prefab = Resources.Load<OpponentController>("Opponent");
@@ -51,11 +53,13 @@ public class GameSession : MonoBehaviour
         return Instantiate(prefab);
     }
 
-    private async void FixedUpdate()
+    private void FixedUpdate()
     {
-        if (!finishedLoading) return;
+        if (!finishedLoading || isCoroutineStarted) return;
 
+        // Start sending and receiving positions
         StartCoroutine(SendAndReceivePositions());
+        isCoroutineStarted = true;
     }
 
     // Handles both sending and receiving player positions
@@ -73,18 +77,15 @@ public class GameSession : MonoBehaviour
         }
         yield return null;
     }
-    
-   
-   
 
     private IEnumerator ReceivePositionsFromClients()
     {
+        var udpEndPoint = new IPEndPoint(IPAddress.Any, UDPPortNumber);
+
         while (true)
         {
             try
             {
-                var udpEndPoint = new IPEndPoint(IPAddress.Any, UDPPortNumber);
-
                 var receiveResult = udpClient.Receive(ref udpEndPoint);
                 var receivedData = Encoding.UTF8.GetString(receiveResult);
 
@@ -110,7 +111,7 @@ public class GameSession : MonoBehaviour
             yield return null;
         }
     }
-    
+
     private void EnsurePlayerAndUpdatePosition(IPEndPoint fromEndpoint, Vector3 statePosition, float stateSize)
     {
         if (!opponents.TryGetValue(fromEndpoint, out var opponentController))
@@ -122,7 +123,7 @@ public class GameSession : MonoBehaviour
         opponentController.transform.position = statePosition;
         opponentController.GetComponent<Blob>().Size = stateSize;
     }
-    
+
     private IEnumerator BroadcastPlayerStatesToClients()
     {
         while (true)
@@ -145,12 +146,13 @@ public class GameSession : MonoBehaviour
             yield return new WaitForSeconds(0.1f); // Send player state every 0.1 seconds
         }
     }
-    
-    
+
     private IEnumerator SendPositionToServer()
     {
         while (true)
         {
+            if (playerController == null) yield return null;
+
             try
             {
                 var state = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
@@ -166,11 +168,10 @@ public class GameSession : MonoBehaviour
             yield return new WaitForSeconds(0.1f); // Send position every 0.1 seconds
         }
     }
-    
 
     private IEnumerator ReceivePositionsFromServer()
     {
-        var serverEndPoint = new IPEndPoint(IPAddress.Parse(hostIP), UDPPortNumber); // Define serverEndPoint variable
+        var serverEndPoint = new IPEndPoint(IPAddress.Parse(hostIP), UDPPortNumber);
 
         while (true)
         {
@@ -201,7 +202,7 @@ public class GameSession : MonoBehaviour
             yield return null;
         }
     }
-    
+
     private void EnsureOpponentAndUpdatePosition(Vector3 position, float size)
     {
         if (opponentController == null)
@@ -212,7 +213,6 @@ public class GameSession : MonoBehaviour
         opponentController.transform.position = position;
         opponentController.GetComponent<Blob>().Size = size;
     }
-
 
     // Host game setup
     public static void HostGame()
@@ -231,9 +231,8 @@ public class GameSession : MonoBehaviour
 
             session.StartCoroutine(session.Co_AcceptClients());  // Accept clients via TCP
             session.StartCoroutine(session.Co_LaunchGame());     // Launch the game scene
-            
+
             Debug.Log("HostGame successfully started");
-            session.StartCoroutine(session.ReceivePositionsFromClients());
         }
         catch (Exception ex)
         {
@@ -274,7 +273,7 @@ public class GameSession : MonoBehaviour
         playerController = SpawnPlayer();
         finishedLoading = true;
     }
-    
+
     // Client joins game and connects to server
     public static void JoinGame(string hostName)
     {
@@ -284,8 +283,8 @@ public class GameSession : MonoBehaviour
 
         try
         {
-            session.udpClient = new UdpClient();  
-            Debug.Log("UDP client initialized"); 
+            session.udpClient = new UdpClient();
+            Debug.Log("UDP client initialized");
 
             session.tcpClient = new TcpClient();
             session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
@@ -296,9 +295,8 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error initializing client: " + ex.Message);
         }
 
-        session.StartCoroutine(session.Co_ConnectToServer());  
+        session.StartCoroutine(session.Co_ConnectToServer());
         session.StartCoroutine(session.Co_LaunchGame());
-        session.StartCoroutine(session.SendPositionToServer());
     }
 
     // Connects client to server
@@ -307,44 +305,35 @@ public class GameSession : MonoBehaviour
         try
         {
             Debug.Log("Attempting to connect to server at " + serverEndpoint);
-            tcpClient.Connect(serverEndpoint);  
+            tcpClient.Connect(serverEndpoint);
             Debug.Log("Connected to server via TCP!");
         }
         catch (Exception ex)
         {
             Debug.LogError("Error connecting to server: " + ex.Message);
         }
-
         yield return null;
     }
 
-    // Resolves IP address from hostname
+    // Helper to get IP from host name
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
-        try
-        {
-            var address = Dns.GetHostAddresses(hostName).First();
-            Debug.Log("Resolved host address for " + hostName); 
-            return new IPEndPoint(address, port);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error resolving IP address for " + hostName + ": " + ex.Message);
-            throw;
-        }
+        var addresses = Dns.GetHostAddresses(hostName);
+        var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork);
+        return new IPEndPoint(ip, port);
     }
-}
 
-// Bundle for player position and size
-[Serializable]
-public class PlayerState
-{
-    public Vector3 position;
-    public float size;
-
-    public PlayerState(Vector3 position, float size)
+    // Data structure for player state
+    [Serializable]
+    private class PlayerState
     {
-        this.position = position;
-        this.size = size;
+        public Vector3 position;
+        public float size;
+
+        public PlayerState(Vector3 pos, float sz)
+        {
+            position = pos;
+            size = sz;
+        }
     }
 }
