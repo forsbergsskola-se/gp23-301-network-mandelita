@@ -37,9 +37,16 @@ public class GameSession : MonoBehaviour
         if (!finishedLoading) return;
 
         if (!isServer)
+        {
             await SendPositionToServer();
+            await ReceiveOpponentUpdates();
+        }
         else
+        {
             await ReceivePositions();
+        }
+        
+            
     }
 
     private async Task SendPositionToServer()
@@ -50,6 +57,8 @@ public class GameSession : MonoBehaviour
         var state = new PlayerState(position, size);
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
+        
+        Debug.Log("Client sent update..");
 
         // Send player position to server via UDP
         await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
@@ -66,6 +75,7 @@ public class GameSession : MonoBehaviour
     
             var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
 
+            Debug.Log($"Received position from {fromEndpoint}");
             // Ensure opponent exists and update their position
             EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
 
@@ -81,6 +91,8 @@ public class GameSession : MonoBehaviour
             var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
             var stateJson = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(stateJson);
+            
+            Debug.Log("Broadcasting");
 
             // Send the updated state to all connected clients
             foreach (var client in clients)
@@ -98,8 +110,29 @@ public class GameSession : MonoBehaviour
             opponents[opponentEndpoint] = opponentController;
         }
 
+        Debug.Log($"Updating opponent position for {opponentEndpoint}: {position}, size: {size}");
         opponentController.transform.position = position;
         opponentController.GetComponent<Blob>().Size = size;
+    }
+
+    private async Task ReceiveOpponentUpdates()
+    {
+        while (udpClient.Available > 0)
+        {
+            var receiveResult = await udpClient.ReceiveAsync();
+            var receivedBytes = receiveResult.Buffer;
+            var receivedJson = Encoding.UTF8.GetString(receivedBytes);
+ 
+            var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
+
+            Debug.Log($"Received opponent update: {opponentState.position}, size: {opponentState.size}");
+
+            if (opponentController != null)
+            {
+                opponentController.transform.position = opponentState.position;
+                opponentController.GetComponent<Blob>().Size = opponentState.size;
+            }
+        }
     }
 
 
