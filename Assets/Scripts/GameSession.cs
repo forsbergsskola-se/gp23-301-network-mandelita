@@ -78,23 +78,19 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            while (true) // Run continuously to check for packets
+            var receiveResult = await udpClient.ReceiveAsync();
+            var fromEndpoint = receiveResult.RemoteEndPoint;
+            var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+            if (string.IsNullOrEmpty(receivedData))
             {
-                var receiveResult = await udpClient.ReceiveAsync();
-                var fromEndpoint = receiveResult.RemoteEndPoint;
-                var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
-
-                if (string.IsNullOrEmpty(receivedData))
-                {
-                    Debug.LogWarning("Received empty data from: " + fromEndpoint);
-                    continue; // Skip empty data
-                }
-
-                var state = JsonUtility.FromJson<PlayerState>(receivedData);
-                Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
-
-                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
+                Debug.LogWarning("Received empty data from: " + fromEndpoint);
             }
+
+            var state = JsonUtility.FromJson<PlayerState>(receivedData);
+            Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
+
+            EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
         {
