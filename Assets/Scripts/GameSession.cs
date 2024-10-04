@@ -76,10 +76,9 @@ public class GameSession : MonoBehaviour
             var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
 
             Debug.Log($"Received position from {fromEndpoint}");
-            // Ensure opponent exists and update their position
+            
             EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-
-            // Broadcast updated player states to all clients
+            
             BroadcastOpponentStates();
         }
     }
@@ -92,7 +91,7 @@ public class GameSession : MonoBehaviour
             var stateJson = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(stateJson);
             
-            Debug.Log("Broadcasting");
+            Debug.Log("Broadcasting to clients: " + stateJson);
 
             // Send the updated state to all connected clients
             foreach (var client in clients)
