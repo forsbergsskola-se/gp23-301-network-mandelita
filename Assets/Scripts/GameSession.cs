@@ -58,28 +58,29 @@ public class GameSession : MonoBehaviour
     }
 
     // Handles both sending and receiving player positions
+    // Handles both sending and receiving player positions
     private async Task SendAndReceivePositions()
     {
         Debug.Log("Update:");
         if (isServer)
         {
             Debug.Log("Server");
-            await ReceivePositions(); // Server receives positions from clients
-            await BroadcastPlayerStates(); // Server then broadcasts all positions to all clients
+            await ReceivePositionsFromClients(); // Server receives positions from clients
+            await BroadcastPlayerStatesToClients(); // Server then broadcasts all positions to all clients
         }
         else
         {
             Debug.Log("Client");
             await SendPositionToServer(); // Clients send their position to the server
-            await ReceivePositions(); // Clients receive opponent positions from the server
+            await ReceivePositionsFromServer(); // Clients receive opponent positions from the server
         }
     }
     
-    private async Task ReceivePositions()
+    private async Task ReceivePositionsFromClients()
     {
         try
         {
-            while (true) 
+            while (true)
             {
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
@@ -93,7 +94,56 @@ public class GameSession : MonoBehaviour
 
                 var state = JsonUtility.FromJson<PlayerState>(receivedData);
                 Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
-                
+
+                // Update opponent position on server
+                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
+
+                // Broadcast the updated position to all clients
+                await BroadcastPlayerStatesToClients();
+            }
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+        {
+            Debug.Log("Socket error would block, delay ");
+            await Task.Delay(100); // Short delay before next check
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("Error receiving positions: " + ex.Message);
+        }
+    }
+
+    private void EnsurePlayerAndUpdatePosition(IPEndPoint fromEndpoint, Vector3 statePosition, float stateSize)
+    {
+        if (!opponents.TryGetValue(fromEndpoint, out var opponentController))
+        {
+            opponentController = SpawnOpponent(); // Spawn opponent if not found
+            opponents[fromEndpoint] = opponentController;
+        }
+
+        opponentController.transform.position = statePosition;
+        opponentController.GetComponent<Blob>().Size = stateSize;
+    }
+
+    private async Task ReceivePositionsFromServer()
+    {
+        try
+        {
+            while (true)
+            {
+                var receiveResult = await udpClient.ReceiveAsync();
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+                var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+                if (string.IsNullOrEmpty(receivedData))
+                {
+                    Debug.LogWarning("Received empty data from: " + fromEndpoint);
+                    continue; // Skip empty data
+                }
+
+                var state = JsonUtility.FromJson<PlayerState>(receivedData);
+                Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
+
                 // Update opponent position on client
                 if (!opponents.TryGetValue(fromEndpoint, out var opponentController))
                 {
@@ -115,24 +165,9 @@ public class GameSession : MonoBehaviour
             Debug.LogError("Error receiving positions: " + ex.Message);
         }
     }
-
-
     
-    private void EnsurePlayerAndUpdatePosition(IPEndPoint playerEndpoint, Vector3 playerPosition, float playerSize)
-    {
-        if (!opponents.TryGetValue(playerEndpoint, out var playerController))
-        {
-            playerController = SpawnOpponent(); // Spawn opponent if not found
-            opponents[playerEndpoint] = playerController;
-        }
-
-        playerController.transform.position = playerPosition;
-        playerController.GetComponent<Blob>().Size = playerSize;  
-        Debug.Log("Update positions");
-    }
-
     // Broadcasts the server's and players' states to all clients
-    private async Task BroadcastPlayerStates()
+    private async Task BroadcastPlayerStatesToClients()
     {
         var hostState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
         var hostJson = JsonUtility.ToJson(hostState);
@@ -148,7 +183,7 @@ public class GameSession : MonoBehaviour
             var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
             var json = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(json);
-        
+    
             foreach (var endpoint in opponents.Keys)
             {
                 await udpClient.SendAsync(bytes, bytes.Length, endpoint); // Broadcast to all clients
@@ -156,6 +191,9 @@ public class GameSession : MonoBehaviour
             }
         }
     }
+    
+    
+    
 
     // Sends the player's position to the server
     private async Task SendPositionToServer()
