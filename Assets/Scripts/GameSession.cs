@@ -93,8 +93,16 @@ public class GameSession : MonoBehaviour
 
                 var state = JsonUtility.FromJson<PlayerState>(receivedData);
                 Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
+                
+                // Update opponent position on client
+                if (!opponents.TryGetValue(fromEndpoint, out var opponentController))
+                {
+                    opponentController = SpawnOpponent(); // Spawn opponent if not found
+                    opponents[fromEndpoint] = opponentController;
+                }
 
-                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
+                opponentController.transform.position = state.position;
+                opponentController.GetComponent<Blob>().Size = state.size;
             }
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
