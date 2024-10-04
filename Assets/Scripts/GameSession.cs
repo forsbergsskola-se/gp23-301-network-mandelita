@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -30,30 +31,77 @@ public class GameSession : MonoBehaviour
     private static string hostIP;
     #endregion
 
-    private bool isCoroutineStarted = false;
-
-    private static GameSession CreateNew()
+ 
+    private async void FixedUpdate()
     {
-        var go = new GameObject("GameSession");
-        DontDestroyOnLoad(go);
-        return go.AddComponent<GameSession>();
+        if (!finishedLoading) return;
+
+        if (!isServer)
+            await SendPositionToServer();
+        else
+            await ReceivePositions();
     }
 
-    private static PlayerController SpawnPlayer()
+    private async Task SendPositionToServer()
     {
-        var prefab = Resources.Load<PlayerController>("Player");
-        Debug.Log("Player Spawned");
-        return Instantiate(prefab);
+        var position = playerController.transform.position;
+        var size = playerController.GetComponent<Blob>().Size;
+
+        var state = new PlayerState(position, size);
+        var stateJson = JsonUtility.ToJson(state);
+        var bytes = Encoding.UTF8.GetBytes(stateJson);
+
+        // Send player position to server via UDP
+        await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+    }
+    
+    private async Task ReceivePositions()
+    {
+        while (udpClient.Available > 0)
+        {
+            var receiveResult = await udpClient.ReceiveAsync();
+            var fromEndpoint = receiveResult.RemoteEndPoint;
+            var receivedBytes = receiveResult.Buffer;
+            var receivedJson = Encoding.UTF8.GetString(receivedBytes);
+    
+            var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+
+            // Ensure opponent exists and update their position
+            EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+
+            // Broadcast updated player states to all clients
+            BroadcastOpponentStates();
+        }
     }
 
-    private static OpponentController SpawnOpponent()
+    private void BroadcastOpponentStates()
     {
-        var prefab = Resources.Load<OpponentController>("Opponent");
-        Debug.Log("Opponent Spawned");
-        return Instantiate(prefab);
+        foreach (var opponent in opponents)
+        {
+            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
+            var stateJson = JsonUtility.ToJson(state);
+            var bytes = Encoding.UTF8.GetBytes(stateJson);
+
+            // Send the updated state to all connected clients
+            foreach (var client in clients)
+            {
+                udpClient.SendAsync(bytes, bytes.Length, client);
+            }
+        }
     }
 
-   
+    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    {
+        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
+        {
+            opponentController = SpawnOpponent();
+            opponents[opponentEndpoint] = opponentController;
+        }
+
+        opponentController.transform.position = position;
+        opponentController.GetComponent<Blob>().Size = size;
+    }
+
 
     // Host game setup
     public static void HostGame()
@@ -162,6 +210,28 @@ public class GameSession : MonoBehaviour
         var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork);
         return new IPEndPoint(ip, port);
     }
+    
+    private static GameSession CreateNew()
+    {
+        var go = new GameObject("GameSession");
+        DontDestroyOnLoad(go);
+        return go.AddComponent<GameSession>();
+    }
+
+    private static PlayerController SpawnPlayer()
+    {
+        var prefab = Resources.Load<PlayerController>("Player");
+        Debug.Log("Player Spawned");
+        return Instantiate(prefab);
+    }
+
+    private static OpponentController SpawnOpponent()
+    {
+        var prefab = Resources.Load<OpponentController>("Opponent");
+        Debug.Log("Opponent Spawned");
+        return Instantiate(prefab);
+    }
+
 
     // Data structure for player state
     [Serializable]
