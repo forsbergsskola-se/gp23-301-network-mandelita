@@ -54,6 +54,7 @@ public class GameSession : MonoBehaviour
         if (!finishedLoading) return;
 
         await SendAndReceivePositions();
+        Invoke(nameof(SendAndReceivePositions), 0.1f);
     }
 
     // Handles both sending and receiving player positions
@@ -78,22 +79,27 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            var receiveResult = await udpClient.ReceiveAsync();
-            var fromEndpoint = receiveResult.RemoteEndPoint;
-            var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
-
-            if (string.IsNullOrEmpty(receivedData))
+            while (true) 
             {
-                Debug.LogWarning("Received empty data from: " + fromEndpoint);
+                var receiveResult = await udpClient.ReceiveAsync();
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+                var receivedData = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+                if (string.IsNullOrEmpty(receivedData))
+                {
+                    Debug.LogWarning("Received empty data from: " + fromEndpoint);
+                    continue; // Skip empty data
+                }
+
+                var state = JsonUtility.FromJson<PlayerState>(receivedData);
+                Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
+
+                EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
             }
-
-            var state = JsonUtility.FromJson<PlayerState>(receivedData);
-            Debug.Log($"Received data from: {fromEndpoint} - Position: {state.position}, Size: {state.size}");
-
-            EnsurePlayerAndUpdatePosition(fromEndpoint, state.position, state.size);
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
         {
+            Debug.Log("Socket error would block, delay ");
             await Task.Delay(100); // Short delay before next check
         }
         catch (Exception ex)
@@ -231,7 +237,7 @@ public class GameSession : MonoBehaviour
 
         try
         {
-            session.udpClient = new UdpClient(UDPPortNumber);  
+            session.udpClient = new UdpClient();  
             Debug.Log("UDP client initialized"); 
 
             session.tcpClient = new TcpClient();
