@@ -56,32 +56,40 @@ public class GameSession : MonoBehaviour
         var state = new PlayerState(position, size);
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
-        
-        Debug.Log("Client sent update..");
+    
+        Debug.Log($"Client sending update: {stateJson}"); // Log the JSON being sent
 
         // Send player position to server via UDP
         await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
     }
+
     
     private async Task ReceivePositions()
     {
         Debug.Log("Server listening for positions...");
-        while (udpClient.Available > 0)
-        {
-            var receiveResult = await udpClient.ReceiveAsync();
-            var fromEndpoint = receiveResult.RemoteEndPoint;
-            var receivedBytes = receiveResult.Buffer;
-            var receivedJson = Encoding.UTF8.GetString(receivedBytes);
     
-            var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+        while (true) // Keep listening for incoming packets
+        {
+            try
+            {
+                var receiveResult = await udpClient.ReceiveAsync(); // Await incoming packets
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+                var receivedBytes = receiveResult.Buffer;
+                var receivedJson = Encoding.UTF8.GetString(receivedBytes);
 
-            Debug.Log($"Received position from {fromEndpoint}");
-            
-            EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-            
-            BroadcastOpponentStates();
+                var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                Debug.Log($"Received position from {fromEndpoint}");
+
+                EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+                BroadcastOpponentStates(); // Ensure this works as expected
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+            }
         }
     }
+
 
     private void BroadcastOpponentStates()
     {
