@@ -15,11 +15,11 @@ public class GameSession : MonoBehaviour
     private const int TcpPortNumber = 44446;
     private bool finishedLoading;
     private PlayerController playerController;
-    private OpponentController opponentController;
     public bool isServer;
 
     #region ------ Client -------
-    private IPEndPoint serverEndpoint;
+    private IPEndPoint serverEndpointUDP;
+    private IPEndPoint serverEndpointTCP;
     private UdpClient udpClient;
     private TcpClient tcpClient;
     #endregion
@@ -37,16 +37,47 @@ public class GameSession : MonoBehaviour
 
         if (!isServer)
         {
-            await SendPositionToServer();
-            await ReceiveOpponentUpdates();
+            if (IsPlayerInitialized())
+            {
+                await SendPositionToServer();
+                await ReceiveOpponentUpdates();
+            }
         }
         else
         {
-            await ReceivePositions();
+            if (AreOpponentsInitialized())
+            {
+                await ReceivePositions();
+            }
         }
-        
-            
     }
+
+    private bool IsPlayerInitialized()
+    {
+        return playerController != null && playerController.GetComponent<Blob>() != null;
+    }
+
+    private bool AreOpponentsInitialized()
+    {
+        // Ensure that the opponents dictionary is populated and valid.
+        return opponents.Count > 0 && opponents.All(o => o.Value != null);
+    }
+
+    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    {
+        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
+        {
+            opponentController = SpawnOpponent();
+            opponents[opponentEndpoint] = opponentController;
+        }
+
+        if (opponentController != null)
+        {
+            Debug.Log($"Updating opponent position for {opponentEndpoint}: {position}, size: {size}");
+            opponentController.UpdatePosition(position, size);
+        }
+    }
+
 
     private async Task SendPositionToServer()
     {
@@ -57,16 +88,17 @@ public class GameSession : MonoBehaviour
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
 
-        Debug.Log($"Client sending update: {stateJson}");
+        Debug.Log("Client sending update.."); //YES
 
         try
         {
             // Send player position to the server via UDP
-            await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+            await udpClient.SendAsync(bytes, bytes.Length, serverEndpointUDP);
+            Debug.Log($"Client sent!"); //?
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Error sending UDP packet: {ex.Message}");
+            Debug.LogError($"Error sending UDP packet: {ex.Message}"); //N
         }
     }
 
@@ -75,7 +107,7 @@ public class GameSession : MonoBehaviour
     {
         Task.Run(async () =>
         {
-            Debug.Log("Server listening for positions...");
+            Debug.Log("Server listening for positions..."); // YES
 
             while (true)
             {
@@ -87,10 +119,10 @@ public class GameSession : MonoBehaviour
                     var receivedJson = Encoding.UTF8.GetString(receivedBytes);
 
                     var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                    Debug.Log($"Received position from {fromEndpoint}: {playerState.position}");
+                    Debug.Log($"Received position from {fromEndpoint}: {playerState.position}"); //NO
 
                     EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                    BroadcastOpponentStates(); // Call this to update all clients
+                    BroadcastOpponentStates(); 
                 }
                 catch (Exception ex)
                 {
@@ -105,7 +137,7 @@ public class GameSession : MonoBehaviour
     {
         Debug.Log("Server listening for positions..."); //YES
     
-        while (true) // Keep listening for incoming packets
+        while (true) 
         {
             try
             {
@@ -137,52 +169,34 @@ public class GameSession : MonoBehaviour
             var bytes = Encoding.UTF8.GetBytes(stateJson);
             
             Debug.Log("Broadcasting to clients: " + stateJson); // NO
-
-            // Send the updated state to all connected clients
+            
             foreach (var client in clients)
             {
                 udpClient.SendAsync(bytes, bytes.Length, client);
             }
         }
     }
-
-    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
-    {
-        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
-        {
-            opponentController = SpawnOpponent();
-            opponents[opponentEndpoint] = opponentController;
-        }
-
-        Debug.Log($"Updating opponent position for {opponentEndpoint}: {position}, size: {size}");
-
-        // Update position and size using the OpponentController method
-        opponentController.UpdatePosition(position, size);
-    }
-
-
+    
     private async Task ReceiveOpponentUpdates()
     {
-        while (udpClient.Available > 0)
+        try
         {
-            var receiveResult = await udpClient.ReceiveAsync();
+            var receiveResult = await udpClient.ReceiveAsync(); // Blocks until data is received
             var receivedBytes = receiveResult.Buffer;
             var receivedJson = Encoding.UTF8.GetString(receivedBytes);
- 
             var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
 
-            Debug.Log($"Received opponent update: {opponentState.position}, size: {opponentState.size}"); // NO
+            Debug.Log($"Received opponent update");
 
-            if (opponentController != null)
-            {
-                opponentController.transform.position = opponentState.position;
-                opponentController.GetComponent<Blob>().Size = opponentState.size;
-            }
+            EnsureOpponentAndUpdatePosition(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
         }
     }
 
-
-    // Host game setup
+    
     public static void HostGame()
     {
         try
@@ -191,19 +205,17 @@ public class GameSession : MonoBehaviour
             session.isServer = true;
 
             session.udpClient = new UdpClient(UDPPortNumber); 
-            Debug.Log("UDP Listener started on port 50000");
+            Debug.Log("UDP Listener started on port 50000"); //YES
 
             session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber); 
             session.tcpListener.Start();
-            Debug.Log("TCP Listener started on port " + TcpPortNumber);
+            Debug.Log("TCP Listener started on port " + TcpPortNumber); //YES
 
             session.StartCoroutine(session.Co_AcceptClients());
             session.StartCoroutine(session.Co_LaunchGame());
-
-            // Start receiving UDP packets
             session.StartReceivingPositions();
 
-            Debug.Log("HostGame successfully started");
+            Debug.Log("HostGame successfully started"); //YES
         }
         catch (Exception ex)
         {
@@ -230,22 +242,20 @@ public class GameSession : MonoBehaviour
             var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
             clients.Add(clientEndpoint); 
 
-            opponentController = SpawnOpponent();
-            opponents[clientEndpoint] = opponentController;
+            var newOpponent = SpawnOpponent();
+            opponents[clientEndpoint] = newOpponent;
 
             yield return null;
         }
     }
-
-    // Launches the game scene
+    
     private IEnumerator Co_LaunchGame()
     {
         yield return SceneManager.LoadSceneAsync("Game");
         playerController = SpawnPlayer();
         finishedLoading = true;
     }
-
-    // Client joins game and connects to server
+    
     public static void JoinGame(string hostName)
     {
         var session = CreateNew();
@@ -253,13 +263,13 @@ public class GameSession : MonoBehaviour
 
         try
         {
-            session.udpClient = new UdpClient();  // Client initializes UDP
-            session.serverEndpoint = GetIPEndPoint(hostName, UDPPortNumber);  
-            Debug.Log("UDP client initialized");
+            session.udpClient = new UdpClient();  
+            session.serverEndpointUDP = GetIPEndPoint(hostName, UDPPortNumber);  
+            Debug.Log("UDP client initialized"); //YES
 
             session.tcpClient = new TcpClient();
-            session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
-            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
+            session.serverEndpointTCP = GetIPEndPoint(hostName, TcpPortNumber);
+            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpointTCP); //YES
         }
         catch (Exception ex)
         {
@@ -269,15 +279,13 @@ public class GameSession : MonoBehaviour
         session.StartCoroutine(session.Co_ConnectToServer());
         session.StartCoroutine(session.Co_LaunchGame());
     }
-
-
-    // Connects client to server
+    
     private IEnumerator Co_ConnectToServer()
     {
         try
         {
-            Debug.Log("Attempting to connect to server at " + serverEndpoint); // YES
-            tcpClient.Connect(serverEndpoint);
+            Debug.Log("Attempting to connect to server at " + serverEndpointTCP); // YES
+            tcpClient.Connect(serverEndpointTCP);
             Debug.Log("Connected to server via TCP!"); // YES
         }
         catch (Exception ex)
@@ -286,8 +294,7 @@ public class GameSession : MonoBehaviour
         }
         yield return null;
     }
-
-    // Helper to get IP from host name
+    
     private static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
         var addresses = Dns.GetHostAddresses(hostName);
