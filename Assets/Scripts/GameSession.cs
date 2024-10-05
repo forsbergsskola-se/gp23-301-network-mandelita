@@ -11,7 +11,7 @@ using UnityEngine.SceneManagement;
 
 public class GameSession : MonoBehaviour
 {
-    private const int UDPPortNumber = 44445;
+    private const int UDPPortNumber = 50000;
     private const int TcpPortNumber = 44446;
     private bool finishedLoading;
     private PlayerController playerController;
@@ -56,12 +56,20 @@ public class GameSession : MonoBehaviour
         var state = new PlayerState(position, size);
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
-    
-        Debug.Log($"Client sending update: {stateJson}"); // YES
 
-        // Send player position to server via UDP
-        await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+        Debug.Log($"Client sending update: {stateJson}");
+
+        try
+        {
+            // Send player position to the server via UDP
+            await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error sending UDP packet: {ex.Message}");
+        }
     }
+
 
     
     private async Task ReceivePositions()
@@ -148,25 +156,55 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            var session = CreateNew(); 
+            var session = CreateNew();
             session.isServer = true;
 
-            session.udpClient = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.1"), UDPPortNumber)); // Binding for local testing
-            Debug.Log("UDP Listener started on port " + UDPPortNumber); // YES
+            session.udpClient = new UdpClient(50000);  // Use the same working port
+            Debug.Log("UDP Listener started on port 50000");
 
-            session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  
-            session.tcpListener.Start();  
-            Debug.Log("TCP Listener started on port " + TcpPortNumber); // YES
+            session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber); 
+            session.tcpListener.Start();
+            Debug.Log("TCP Listener started on port " + TcpPortNumber);
 
-            session.StartCoroutine(session.Co_AcceptClients());  
-            session.StartCoroutine(session.Co_LaunchGame());     
-            Debug.Log("HostGame successfully started"); // YES
+            session.StartCoroutine(session.Co_AcceptClients()); 
+            session.StartCoroutine(session.Co_LaunchGame()); 
+            session.StartCoroutine(session.Co_ReceiveUdpMessages());  // Add this to handle UDP reception
+            Debug.Log("HostGame successfully started");
         }
         catch (Exception ex)
         {
             Debug.LogError("Error in HostGame: " + ex.Message);
         }
     }
+    
+    private IEnumerator Co_ReceiveUdpMessages()
+    {
+        Debug.Log("Server listening for UDP packets...");
+
+        while (true)
+        {
+            IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 50000);
+        
+            try
+            {
+                byte[] receivedBytes = udpClient.Receive(ref remoteEndPoint);
+                string receivedData = Encoding.UTF8.GetString(receivedBytes);
+
+                Debug.Log($"Received data from {remoteEndPoint}: {receivedData}");
+                
+                var playerState = JsonUtility.FromJson<PlayerState>(receivedData);
+                EnsureOpponentAndUpdatePosition(remoteEndPoint, playerState.position, playerState.size);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error receiving UDP packet: {ex.Message}");
+            }
+
+            yield return null;  // Continue listening each frame
+        }
+    }
+
+
 
     // Accepts clients via TCP
     private IEnumerator Co_AcceptClients()
@@ -210,14 +248,13 @@ public class GameSession : MonoBehaviour
 
         try
         {
-            session.udpClient = new UdpClient();
-            Debug.Log("UDP client initialized"); // YES
+            session.udpClient = new UdpClient();  // Client initializes UDP
+            session.serverEndpoint = GetIPEndPoint(hostName, 50000);  // Make sure to use the right port
+            Debug.Log("UDP client initialized");
 
             session.tcpClient = new TcpClient();
-            //session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
-            session.serverEndpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), TcpPortNumber);
-
-            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint); // YES
+            session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
+            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
         }
         catch (Exception ex)
         {
@@ -227,6 +264,7 @@ public class GameSession : MonoBehaviour
         session.StartCoroutine(session.Co_ConnectToServer());
         session.StartCoroutine(session.Co_LaunchGame());
     }
+
 
     // Connects client to server
     private IEnumerator Co_ConnectToServer()
