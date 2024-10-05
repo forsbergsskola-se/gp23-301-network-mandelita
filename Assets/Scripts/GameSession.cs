@@ -33,55 +33,93 @@ public class GameSession : MonoBehaviour
     #endregion
 
  
-    private void FixedUpdate()
+    private async void FixedUpdate()
     {
         if (!finishedLoading || !udpReady) return; 
 
         if (!isServer)
         {
-            SendPositionToServer();
-            ReceiveOpponentUpdates();
+            await SendPositionToServer();
+            await ReceiveOpponentUpdates();
         }
         else
         {
-            ReceivePositions();
+            await ReceivePositions();
         }
     }
 
-    private IEnumerator ReceivePositions()
+    private async Task ReceivePositions()
+{
+    Debug.Log("Server listening for positions...");
+
+    while (true)
     {
-        Debug.Log("Server listening for positions...");
-
-        while (true)
+        try
         {
-            if (udpClient.Available > 0) // Check if there are any packets available
-            {
-                try
-                {
-                    // Receive a UDP packet
-                    var receiveResult = udpClient.ReceiveAsync().Result; // Blocking call here
-                    var fromEndpoint = receiveResult.RemoteEndPoint;
-                    var receivedBytes = receiveResult.Buffer;
-                    var receivedJson = Encoding.UTF8.GetString(receivedBytes);
+            // Await for receiving the UDP packet
+            var receiveResult = await udpClient.ReceiveAsync();
+            var fromEndpoint = receiveResult.RemoteEndPoint;
+            var receivedBytes = receiveResult.Buffer;
+            var receivedJson = Encoding.UTF8.GetString(receivedBytes);
 
-                    Debug.Log($"Received position from {fromEndpoint}");
+            Debug.Log($"Received position from {fromEndpoint}");
 
-                    var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                    EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                    BroadcastOpponentStates(); 
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error receiving UDP packets: {ex.Message}");
-                }
-            }
-        
-            yield return null; // Yield to allow other processes to run
+            var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+            EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+            BroadcastOpponentStates(); 
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+        }
+
+        await Task.Yield(); // Yield back to the main loop
+    }
+}
+
+    private async Task SendPositionToServer()
+    {
+        if (!udpReady) return; 
+    
+        var position = playerController.transform.position;
+        var size = playerController.GetComponent<Blob>().Size;
+    
+        var state = new PlayerState(position, size);
+        var stateJson = JsonUtility.ToJson(state);
+        var bytes = Encoding.UTF8.GetBytes(stateJson);
+    
+        Debug.Log("Client sending position update...");
+    
+        try
+        {
+            await udpClient.SendAsync(bytes, bytes.Length, serverEndpointUDP);
+            Debug.Log("Client sent position!");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error sending UDP packet: {ex.Message}");
         }
     }
 
+    private async Task ReceiveOpponentUpdates()
+{
+    if (!udpReady) return;
 
+    try
+    {
+        var receiveResult = await udpClient.ReceiveAsync();
+        var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+        var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
 
+        Debug.Log($"Client received opponent update");
+
+        EnsureOpponentAndUpdatePosition(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
+    }
+    catch (Exception ex)
+    {
+        Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+    }
+}
 
     private void BroadcastOpponentStates()
     {
@@ -100,54 +138,6 @@ public class GameSession : MonoBehaviour
                     udpClient.SendAsync(bytes, bytes.Length, client);
                 }
             }
-        }
-    }
-
-    
-    private async void SendPositionToServer()
-    {
-        if (!udpReady) return; 
-
-        var position = playerController.transform.position;
-        var size = playerController.GetComponent<Blob>().Size;
-
-        var state = new PlayerState(position, size);
-        var stateJson = JsonUtility.ToJson(state);
-        var bytes = Encoding.UTF8.GetBytes(stateJson);
-
-        Debug.Log("Client sending position update...");
-
-        try
-        {
-            await udpClient.SendAsync(bytes, bytes.Length, serverEndpointUDP);
-            Debug.Log("Client sent position!");
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Error sending UDP packet: {ex.Message}");
-        }
-    }
-
-    
-    private void ReceiveOpponentUpdates()
-    {
-        if (!udpReady) return;
-        try
-        {
-            if (udpClient.Available > 0)
-            {
-                var receiveResult = udpClient.Receive(ref serverEndpointUDP);
-                var receivedJson = Encoding.UTF8.GetString(receiveResult);
-                var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
-
-                Debug.Log($"Client received opponent update");
-
-                EnsureOpponentAndUpdatePosition(serverEndpointUDP, opponentState.position, opponentState.size);
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
         }
     }
     
