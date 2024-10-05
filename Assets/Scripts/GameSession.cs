@@ -57,7 +57,7 @@ public class GameSession : MonoBehaviour
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
     
-        Debug.Log($"Client sending update: {stateJson}"); // Log the JSON being sent
+        Debug.Log($"Client sending update: {stateJson}"); // YES
 
         // Send player position to server via UDP
         await udpClient.SendAsync(bytes, bytes.Length, serverEndpoint);
@@ -66,26 +66,26 @@ public class GameSession : MonoBehaviour
     
     private async Task ReceivePositions()
     {
-        Debug.Log("Server listening for positions...");
+        Debug.Log("Server listening for positions..."); //YES
     
         while (true) // Keep listening for incoming packets
         {
             try
             {
-                var receiveResult = await udpClient.ReceiveAsync(); // Await incoming packets
+                var receiveResult = await udpClient.ReceiveAsync(); 
                 var fromEndpoint = receiveResult.RemoteEndPoint;
                 var receivedBytes = receiveResult.Buffer;
                 var receivedJson = Encoding.UTF8.GetString(receivedBytes);
 
                 var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                Debug.Log($"Received position from {fromEndpoint}");
+                Debug.Log($"Received position from {fromEndpoint}"); //NO
 
                 EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                BroadcastOpponentStates(); // Ensure this works as expected
+                BroadcastOpponentStates(); 
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}"); //NO
             }
         }
     }
@@ -99,7 +99,7 @@ public class GameSession : MonoBehaviour
             var stateJson = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(stateJson);
             
-            Debug.Log("Broadcasting to clients: " + stateJson);
+            Debug.Log("Broadcasting to clients: " + stateJson); // NO
 
             // Send the updated state to all connected clients
             foreach (var client in clients)
@@ -117,7 +117,7 @@ public class GameSession : MonoBehaviour
             opponents[opponentEndpoint] = opponentController;
         }
 
-        Debug.Log($"Updating opponent position for {opponentEndpoint}: {position}, size: {size}");
+        Debug.Log($"Updating opponent position for {opponentEndpoint}: {position}, size: {size}"); // NO
         opponentController.transform.position = position;
         opponentController.GetComponent<Blob>().Size = size;
     }
@@ -132,7 +132,7 @@ public class GameSession : MonoBehaviour
  
             var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
 
-            Debug.Log($"Received opponent update: {opponentState.position}, size: {opponentState.size}");
+            Debug.Log($"Received opponent update: {opponentState.position}, size: {opponentState.size}"); // NO
 
             if (opponentController != null)
             {
@@ -151,16 +151,16 @@ public class GameSession : MonoBehaviour
             var session = CreateNew(); 
             session.isServer = true;
 
-            session.udpClient = new UdpClient(UDPPortNumber); 
-            Debug.Log("UDP Listener started on port " + UDPPortNumber);
+            session.udpClient = new UdpClient(new IPEndPoint(IPAddress.Parse("127.0.0.1"), UDPPortNumber)); // Binding for local testing
+            Debug.Log("UDP Listener started on port " + UDPPortNumber); // YES
 
             session.tcpListener = new TcpListener(IPAddress.Any, TcpPortNumber);  
             session.tcpListener.Start();  
-            Debug.Log("TCP Listener started on port " + TcpPortNumber);
+            Debug.Log("TCP Listener started on port " + TcpPortNumber); // YES
 
             session.StartCoroutine(session.Co_AcceptClients());  
             session.StartCoroutine(session.Co_LaunchGame());     
-            Debug.Log("HostGame successfully started");
+            Debug.Log("HostGame successfully started"); // YES
         }
         catch (Exception ex)
         {
@@ -171,7 +171,7 @@ public class GameSession : MonoBehaviour
     // Accepts clients via TCP
     private IEnumerator Co_AcceptClients()
     {
-        Debug.Log("Waiting for TCP clients to connect...");
+        Debug.Log("Waiting for TCP clients to connect..."); // YES
 
         while (true)
         {
@@ -182,7 +182,7 @@ public class GameSession : MonoBehaviour
             }
 
             var client = task.Result;
-            Debug.Log("Client connected via TCP!");
+            Debug.Log("Client connected via TCP!"); // YES
 
             var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
             clients.Add(clientEndpoint); // Add client end point to the list
@@ -211,11 +211,13 @@ public class GameSession : MonoBehaviour
         try
         {
             session.udpClient = new UdpClient();
-            Debug.Log("UDP client initialized");
+            Debug.Log("UDP client initialized"); // YES
 
             session.tcpClient = new TcpClient();
-            session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
-            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint);
+            //session.serverEndpoint = GetIPEndPoint(hostName, TcpPortNumber);
+            session.serverEndpoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), TcpPortNumber);
+
+            Debug.Log("TCP client initialized, server endpoint: " + session.serverEndpoint); // YES
         }
         catch (Exception ex)
         {
@@ -231,9 +233,9 @@ public class GameSession : MonoBehaviour
     {
         try
         {
-            Debug.Log("Attempting to connect to server at " + serverEndpoint);
+            Debug.Log("Attempting to connect to server at " + serverEndpoint); // YES
             tcpClient.Connect(serverEndpoint);
-            Debug.Log("Connected to server via TCP!");
+            Debug.Log("Connected to server via TCP!"); // YES
         }
         catch (Exception ex)
         {

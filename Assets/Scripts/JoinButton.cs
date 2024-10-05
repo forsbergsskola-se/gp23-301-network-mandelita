@@ -9,6 +9,7 @@ public class JoinButton : MonoBehaviour
 
     public void OnButtonClick()
     {
-        GameSession.JoinGame(joinText.text);
+        //GameSession.JoinGame(joinText.text);
+        GameSession.JoinGame("127.0.0.1");
     }
 }

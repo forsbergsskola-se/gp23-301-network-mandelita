@@ -22,8 +22,8 @@ public class PlayerController : MonoBehaviour
         Vector3 position = transform.position;
 
         // Arena size, adjust accordingly
-        float arenaMinX = -10f, arenaMaxX = 10f;
-        float arenaMinY = -10f, arenaMaxY = 10f;
+        float arenaMinX = -5f, arenaMaxX = 5f;
+        float arenaMinY = -5f, arenaMaxY = 5f;
 
         // Clamp the player's position within arena bounds
         position.x = Mathf.Clamp(position.x, arenaMinX, arenaMaxX);

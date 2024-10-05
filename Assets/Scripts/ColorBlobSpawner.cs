@@ -5,7 +5,7 @@ using UnityEngine;
 public class ColorBlobSpawner : MonoBehaviour
 {
     public ColorBlobPool blobPool;
-    public Vector2 arenaBounds = new Vector2(10f, 10f); // X and Z bounds for the arena
+    public Vector2 arenaBounds = new Vector2(4f, 4f); // X and Z bounds for the arena
     public float spawnInterval = 2f;
 
     void Start()
