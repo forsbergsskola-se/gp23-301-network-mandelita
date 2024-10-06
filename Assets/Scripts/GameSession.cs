@@ -315,8 +315,11 @@ public class GameSession : MonoBehaviour
 
     private IEnumerator Co_ConnectToServer()
 {
-    // Send initial connection request
-    var request = new ConnectionRequestMessage();
+    // Create player state
+    var playerState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
+
+    // Create connection request message
+    var request = new ConnectionRequestMessage(serverEndpointUDP, playerState);
     var requestJson = JsonUtility.ToJson(request);
     var requestBytes = Encoding.UTF8.GetBytes(requestJson);
 
@@ -437,8 +440,8 @@ public class PlayerState
 [Serializable]
 public class OpponentSpawnMessage
 {
-    public IPEndPoint endpoint;
-    public Vector3 position;
+    public IPEndPoint endpoint; 
+    public Vector3 position; 
     public float size;
 
     public OpponentSpawnMessage(IPEndPoint endpoint, Vector3 position, float size)
@@ -449,8 +452,16 @@ public class OpponentSpawnMessage
     }
 }
 
+
 [Serializable]
 public class ConnectionRequestMessage
 {
-    // Any necessary fields for connection requests can be added here
+    public IPEndPoint endpoint; 
+    public PlayerState playerState;
+    public ConnectionRequestMessage(IPEndPoint endpoint, PlayerState playerState)
+    {
+        this.endpoint = endpoint;
+        this.playerState = playerState;
+    }
 }
+
