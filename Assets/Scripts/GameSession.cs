@@ -25,7 +25,7 @@ public class GameSession : MonoBehaviour
     #endregion
 
     #region ------ Server -------
-    public Dictionary<IPEndPoint, OpponentController> opponents = new();
+    private Dictionary<IPEndPoint, OpponentController> opponents = new();
     private List<IPEndPoint> clients = new();
     private TcpListener tcpListener;
     private bool udpReady;
@@ -82,7 +82,12 @@ public class GameSession : MonoBehaviour
         {
             var receiveResult = await udpClient.ReceiveAsync();
             var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-            
+        
+            if (receiveResult.RemoteEndPoint.Equals(serverEndpointUDP)) 
+            {
+                return;
+            }
+
             if (!IsValidJson(receivedJson)) 
             {
                 Debug.LogWarning("Invalid JSON format received, skipping packet.");
@@ -101,9 +106,10 @@ public class GameSession : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Error receiving UDP packets: {ex.Message}");  // throws
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");  
         }
     }
+
     
     private void EnsureOpponentClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
@@ -113,17 +119,16 @@ public class GameSession : MonoBehaviour
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
 
-            if (opponentController == null) // Check if opponentController is null
+            if (opponentController == null)
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
-                return; // Exit if spawning failed
+                return;
             }
 
             opponents[opponentEndpoint] = opponentController;
         }
         else
         {
-            // Only update if the opponentController is not null
             Debug.Log($"Updating opponent for {opponentEndpoint}");
             opponentController.UpdatePosition(position, size);
         }
@@ -160,14 +165,13 @@ public class GameSession : MonoBehaviour
                     Debug.LogWarning("Parsed playerState is null, skipping update.");
                     continue;
                 }
-
-                // Ensure the opponent's state is updated, except for the host
+                
                 EnsureOpponentServer(fromEndpoint, playerState.position, playerState.size);
-                BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
+                BroadcastOpponentStates(); 
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}"); // throws
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}"); 
             }
 
             await Task.Yield(); // Yield back to the main loop
@@ -221,23 +225,18 @@ public class GameSession : MonoBehaviour
 
             Debug.Log("Broadcasting opponent state to all clients");
 
-            // Send opponent state to all opponents' UDP endpoints
-            foreach (var opponentEntry in opponents)
+            // Send opponent state to all clients
+            foreach (var clientEndpoint in clients) // Send to all connected clients
             {
-                var opponentEndpoint = opponentEntry.Key; // IPEndPoint of the opponent
-
-                // Check if the opponentEntry is valid before sending
-                if (opponentEndpoint != null)
+                if (clientEndpoint != opponent.Key) // Ensure you're not sending to yourself
                 {
-                    if (!opponentEndpoint.Equals(serverEndpointUDP)) 
-                    {
-                        udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
-                        Debug.Log($"Sent state to {opponentEndpoint}");
-                    }
+                    udpClient.SendAsync(bytes, bytes.Length, clientEndpoint);
+                    Debug.Log($"Sent state to {clientEndpoint}");
                 }
             }
         }
     }
+
 
 
     public static void HostGame()
