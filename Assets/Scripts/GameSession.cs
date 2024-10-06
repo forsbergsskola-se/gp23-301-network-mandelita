@@ -34,9 +34,7 @@ public class GameSession : MonoBehaviour
     private async void FixedUpdate()
     {
         if (!finishedLoading || !udpReady) return;
-
-        Debug.Log("Server endopointUDP: " + serverEndpointUDP);
-        Debug.Log("Server endopointUDP: " + serverEndpointTCP);
+        
         Debug.Log("Client count: " + clients.Count);
         Debug.Log("OpponentsCount: " + opponents.Count);
         
@@ -99,7 +97,7 @@ public class GameSession : MonoBehaviour
             }
 
             Debug.Log("Client received opponent update");
-            EnsureOpponentForClient(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
+            EnsureOpponentServer(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
         }
         catch (Exception ex)
         {
@@ -108,7 +106,7 @@ public class GameSession : MonoBehaviour
     }
 
 // Client
-    private void EnsureOpponentForClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         // Only spawn opponent if the game has finished loading
         if (!finishedLoading)
@@ -170,7 +168,7 @@ public class GameSession : MonoBehaviour
                 }
 
                 // Ensure the opponent's state is updated, except for the host
-                EnsureOpponentForServer(fromEndpoint, playerState.position, playerState.size);
+                EnsureOpponentClient(fromEndpoint, playerState.position, playerState.size);
                 BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
             }
             catch (Exception ex)
@@ -182,8 +180,8 @@ public class GameSession : MonoBehaviour
         }
     }
 
-    // Server
-    private void EnsureOpponentForServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    
+    private void EnsureOpponentClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
