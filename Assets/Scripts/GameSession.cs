@@ -97,31 +97,16 @@ public class GameSession : MonoBehaviour
             }
 
             Debug.Log("Client received opponent update");
-            EnsureOpponentServer(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
+            EnsureOpponentClient(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
         }
         catch (Exception ex)
         {
             Debug.LogError($"Error receiving UDP packets: {ex.Message}");
         }
     }
-
-// Client
-    private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    
+    private void EnsureOpponentClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
-        // Only spawn opponent if the game has finished loading
-        if (!finishedLoading)
-        {
-            Debug.Log("Game is not finished loading. Opponent will not be spawned yet.");
-            return;
-        }
-
-        // Skip spawning for the host's own opponentEndpoint to avoid duplicates
-        if (opponentEndpoint.Equals(serverEndpointUDP))
-        {
-            Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
-            return;
-        }
-
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
@@ -133,6 +118,9 @@ public class GameSession : MonoBehaviour
         // Update the opponent's position and size
         opponentController.UpdatePosition(position, size);
     }
+
+
+    
 
     // Server
     private async Task ReceivePositions()
@@ -168,7 +156,7 @@ public class GameSession : MonoBehaviour
                 }
 
                 // Ensure the opponent's state is updated, except for the host
-                EnsureOpponentClient(fromEndpoint, playerState.position, playerState.size);
+                EnsureOpponentServer(fromEndpoint, playerState.position, playerState.size);
                 BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
             }
             catch (Exception ex)
@@ -179,10 +167,23 @@ public class GameSession : MonoBehaviour
             await Task.Yield(); // Yield back to the main loop
         }
     }
-
     
-    private void EnsureOpponentClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
+    private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
+        // Only spawn opponent if the game has finished loading
+        if (!finishedLoading)
+        {
+            Debug.Log("Game is not finished loading. Opponent will not be spawned yet.");
+            return;
+        }
+
+        // Skip spawning for the host's own opponentEndpoint to avoid duplicates
+        if (opponentEndpoint.Equals(serverEndpointUDP))
+        {
+            Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
+            return;
+        }
+
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
@@ -194,6 +195,9 @@ public class GameSession : MonoBehaviour
         // Update the opponent's position and size
         opponentController.UpdatePosition(position, size);
     }
+
+    
+    
 
 
     //Server
