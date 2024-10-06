@@ -112,31 +112,22 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
-    
+
             if (opponentController == null) // Check if opponentController is null
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return; // Exit if spawning failed
             }
-    
+
             opponents[opponentEndpoint] = opponentController;
-        }
-    
-        // Log the opponentController details for debugging
-        if (opponentController != null)
-        {
-            Debug.Log($"Updating opponent at {opponentEndpoint} to position: {position}, size: {size}");
-            opponentController.UpdatePosition(position, size);
         }
         else
         {
-            Debug.LogWarning($"OpponentController for {opponentEndpoint} is null, unable to update.");
+            // Only update if the opponentController is not null
+            Debug.Log($"Updating opponent at {opponentEndpoint} to position: {position}, size: {size}");
+            opponentController.UpdatePosition(position, size);
         }
     }
-
-
-
-
     
 
     // Server
@@ -207,25 +198,22 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
-        
+
             if (opponentController == null) // Check if opponentController is null
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return; // Exit if spawning failed
             }
-        
+
             opponents[opponentEndpoint] = opponentController;
         }
-
-        // Update the opponent's position and size
-        opponentController.UpdatePosition(position, size);
+        else if (opponentController != null)
+        {
+            // Update the opponent's position and size only if the controller is not null
+            opponentController.UpdatePosition(position, size);
+        }
     }
-
-
     
-    
-
-
     //Server
     private void BroadcastOpponentStates()
     {
