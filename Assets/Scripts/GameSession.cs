@@ -80,13 +80,31 @@ public class GameSession : MonoBehaviour
             {
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
+
+                // Skip processing packets from the server itself
+                if (fromEndpoint.Equals(serverEndpointUDP)) 
+                    continue;
+
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+                Debug.Log($"Received position from {fromEndpoint}: {receivedJson}");
 
-                Debug.Log($"Received position from {fromEndpoint}");
+                // Validate JSON format before deserialization
+                if (!IsValidJson(receivedJson)) 
+                {
+                    Debug.LogWarning("Invalid JSON format received, skipping packet.");
+                    continue;
+                }
 
-                var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                BroadcastOpponentStates();
+                try
+                {
+                    var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                    EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+                    BroadcastOpponentStates();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Error parsing JSON: {ex.Message}");
+                }
             }
             catch (Exception ex)
             {
@@ -95,6 +113,25 @@ public class GameSession : MonoBehaviour
 
             await Task.Yield(); // Yield back to the main loop
         }
+    }
+
+// Helper function to validate JSON format. Found this to fix all errors in ReceivePositions
+    private bool IsValidJson(string json)
+    {
+        json = json.Trim();
+        if ((json.StartsWith("{") && json.EndsWith("}")) || (json.StartsWith("[") && json.EndsWith("]")))
+        {
+            try
+            {
+                var obj = JsonUtility.FromJson<PlayerState>(json);
+                return obj != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        return false;
     }
 
     private async Task ReceiveOpponentUpdates()
@@ -144,19 +181,28 @@ public class GameSession : MonoBehaviour
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
+        
+            // Skip spawning for the host's own opponentEndpoint to avoid duplicates
+            if (opponentEndpoint.Equals(serverEndpointUDP))
+            {
+                Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
+                return;
+            }
+
             opponentController = SpawnOpponent();
             opponents[opponentEndpoint] = opponentController;
         }
 
-        // Update the opponent's position only if it's still valid
-        if (opponentController != null)
+        // Update the opponent's position and size only if it's still valid
+        if (opponentController != null && opponentController.gameObject != null)
         {
             Debug.Log($"Updating opponent position for {opponentEndpoint}");
             opponentController.UpdatePosition(position, size);
         }
         else
         {
-            Debug.LogWarning($"Opponent controller for {opponentEndpoint} was null.");
+            Debug.LogWarning($"Opponent controller for {opponentEndpoint} was null or destroyed.");
+            opponents.Remove(opponentEndpoint); // Remove destroyed or invalid opponents
         }
     }
 
