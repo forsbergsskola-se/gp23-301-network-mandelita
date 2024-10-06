@@ -177,11 +177,18 @@ public class GameSession : MonoBehaviour
 
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
+        // Only spawn opponent if the game has finished loading
+        if (!finishedLoading)
+        {
+            Debug.Log("Game is not finished loading. Opponent will not be spawned yet.");
+            return;
+        }
+
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
-        
+
             // Skip spawning for the host's own opponentEndpoint to avoid duplicates
             if (opponentEndpoint.Equals(serverEndpointUDP))
             {
@@ -205,6 +212,7 @@ public class GameSession : MonoBehaviour
             opponents.Remove(opponentEndpoint); // Remove destroyed or invalid opponents
         }
     }
+
 
     public static void HostGame()
     {
@@ -249,17 +257,23 @@ public class GameSession : MonoBehaviour
             Debug.Log($"Client connected via TCP from {clientEndpoint}");
             clients.Add(clientEndpoint);
 
-            // Spawn opponent for this client (on server)
-            var newOpponent = SpawnOpponent();
-            opponents[clientEndpoint] = newOpponent;
+            // Spawn opponent for this client only if the game is finished loading
+            if (finishedLoading)
+            {
+                var newOpponent = SpawnOpponent();
+                opponents[clientEndpoint] = newOpponent;
+                SendHostStateToClient(clientEndpoint);
+                Debug.Log($"Opponent spawned for {clientEndpoint}");
+            }
+            else
+            {
+                Debug.Log("Game is not finished loading. Opponent will not be spawned for this client yet.");
+            }
 
-            // Send host state to the newly connected client
-            SendHostStateToClient(clientEndpoint);
-
-            Debug.Log($"Opponent spawned for {clientEndpoint}");
             yield return null;
         }
     }
+
 
     private void SendHostStateToClient(IPEndPoint clientEndpoint)
     {
