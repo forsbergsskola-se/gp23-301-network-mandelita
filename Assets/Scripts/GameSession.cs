@@ -101,7 +101,7 @@ public class GameSession : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");  // throws
         }
     }
     
@@ -112,12 +112,20 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
+        
+            if (opponentController == null) // Check if opponentController is null
+            {
+                Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
+                return; // Exit if spawning failed
+            }
+        
             opponents[opponentEndpoint] = opponentController;
         }
 
         // Update the opponent's position and size
         opponentController.UpdatePosition(position, size);
     }
+
 
 
     
@@ -161,13 +169,14 @@ public class GameSession : MonoBehaviour
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}"); // throws
             }
 
             await Task.Yield(); // Yield back to the main loop
         }
     }
     
+   
     private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         // Only spawn opponent if the game has finished loading
@@ -189,12 +198,20 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
+        
+            if (opponentController == null) // Check if opponentController is null
+            {
+                Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
+                return; // Exit if spawning failed
+            }
+        
             opponents[opponentEndpoint] = opponentController;
         }
 
         // Update the opponent's position and size
         opponentController.UpdatePosition(position, size);
     }
+
 
     
     
@@ -348,9 +365,17 @@ public class GameSession : MonoBehaviour
     private static OpponentController SpawnOpponent()
     {
         var prefab = Resources.Load<OpponentController>("Opponent");
+    
+        if (prefab == null)
+        {
+            Debug.LogError("Opponent prefab not found!");
+            return null; // Return null if the prefab is not found
+        }
+    
         Debug.Log("Opponent Spawned");
         return Instantiate(prefab);
     }
+
     
     [Serializable]
     private class PlayerState
