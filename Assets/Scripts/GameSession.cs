@@ -303,7 +303,8 @@ public class GameSession : MonoBehaviour
 
             Debug.Log("UDP client initialized for " + hostName);
 
-            session.StartCoroutine(session.Co_ConnectToServer());
+            // Start coroutine to connect to server after loading the game
+            session.StartCoroutine(session.Co_LaunchGameAndConnect());
 
             Debug.Log("JoinGame successfully executed");
         }
@@ -313,12 +314,28 @@ public class GameSession : MonoBehaviour
         }
     }
 
-    private IEnumerator Co_ConnectToServer()
-{
-    // Create player state
-    var playerState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
+    private IEnumerator Co_LaunchGameAndConnect()
+    {
+        yield return SceneManager.LoadSceneAsync("Game");
+        playerController = SpawnPlayer();
+        finishedLoading = true;
 
-    // Create connection request message
+        // Now that we have finished loading and the player is spawned, connect to the server
+        yield return StartCoroutine(Co_ConnectToServer());
+    }
+
+
+   
+     private IEnumerator Co_ConnectToServer()
+{
+    if (playerController == null)
+    {
+        Debug.LogError("PlayerController is not initialized. Cannot connect to server.");
+        yield break; 
+    }
+    
+    var playerState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
+    
     var request = new ConnectionRequestMessage(serverEndpointUDP, playerState);
     var requestJson = JsonUtility.ToJson(request);
     var requestBytes = Encoding.UTF8.GetBytes(requestJson);
