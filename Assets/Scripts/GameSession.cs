@@ -199,34 +199,29 @@ public class GameSession : MonoBehaviour
 
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
-        // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
-        
-            // Skip spawning for the host's own opponentEndpoint to avoid duplicates
+
+            // Avoid spawning opponent for host's own endpoint
             if (opponentEndpoint.Equals(serverEndpointUDP))
             {
-                Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
+                Debug.Log("Skipping spawn for host’s own endpoint.");
                 return;
             }
 
             opponentController = SpawnOpponent();
             opponents[opponentEndpoint] = opponentController;
         }
-
-        // Update the opponent's position and size only if it's still valid
-        if (opponentController != null && opponentController.gameObject != null)
-        {
-            Debug.Log($"Updating opponent position for {opponentEndpoint}");
-            opponentController.UpdatePosition(position, size);
-        }
         else
         {
-            Debug.LogWarning($"Opponent controller for {opponentEndpoint} was null or destroyed.");
-            opponents.Remove(opponentEndpoint); // Remove destroyed or invalid opponents
+            Debug.Log($"Opponent already exists for {opponentEndpoint}, updating position and size.");
         }
+
+        // Update the opponent's position and size
+        opponentController?.UpdatePosition(position, size);
     }
+
 
     public static void HostGame()
     {
@@ -269,19 +264,36 @@ public class GameSession : MonoBehaviour
             var clientEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
 
             Debug.Log($"Client connected via TCP from {clientEndpoint}");
-            clients.Add(clientEndpoint);
 
-            // Spawn opponent for this client (on server)
-            var newOpponent = SpawnOpponent();
-            opponents[clientEndpoint] = newOpponent;
+            if (!clients.Contains(clientEndpoint))
+            {
+                clients.Add(clientEndpoint);
 
-            // Send host state to the newly connected client
-            SendHostStateToClient(clientEndpoint);
+                // Check if opponent for this client already exists
+                if (!opponents.ContainsKey(clientEndpoint))
+                {
+                    Debug.Log($"Spawning new opponent for client {clientEndpoint}");
+                    var newOpponent = SpawnOpponent();
+                    opponents[clientEndpoint] = newOpponent;
+                }
+                else
+                {
+                    Debug.LogWarning($"Opponent already exists for {clientEndpoint}, skipping spawn.");
+                }
 
-            Debug.Log($"Opponent spawned for {clientEndpoint}");
+                // Send host state to the newly connected client
+                SendHostStateToClient(clientEndpoint);
+                Debug.Log($"Opponent spawned and host state sent for {clientEndpoint}");
+            }
+            else
+            {
+                Debug.LogWarning($"Client {clientEndpoint} is already in the clients list, skipping.");
+            }
+
             yield return null;
         }
     }
+
 
     private void SendHostStateToClient(IPEndPoint clientEndpoint)
     {
