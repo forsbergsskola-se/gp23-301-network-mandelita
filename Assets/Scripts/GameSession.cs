@@ -35,10 +35,12 @@ public class GameSession : MonoBehaviour
     {
         if (!finishedLoading || !udpReady) return;
         
+        Debug.Log("Client count: " + clients.Count);
+        Debug.Log("OpponentsCount: " + opponents.Count);
+        
         if (!isServer) // Client
         {
             await SendPositionToServer();
-            Debug.Log("Call ReceiveOpponentUpdates");
             await ReceiveOpponentUpdates();
         }
         else // Server
@@ -71,17 +73,17 @@ public class GameSession : MonoBehaviour
             Debug.LogError($"Error sending UDP packet: {ex.Message}");
         }
     }
-
+    
+    
     // Client
     private async Task ReceiveOpponentUpdates()
     {
-        if (!udpReady) return;
         try
         {
             var receiveResult = await udpClient.ReceiveAsync();
             var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-
-            if (!IsValidJson(receivedJson))
+            
+            if (!IsValidJson(receivedJson)) 
             {
                 Debug.LogWarning("Invalid JSON format received, skipping packet.");
                 return;
@@ -99,16 +101,16 @@ public class GameSession : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");  
         }
     }
-
+    
     private void EnsureOpponentClient(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
-            Debug.Log($"Spawning new opponent for {opponentEndpoint}"); // NOT HAPPENING
+            Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
 
             if (opponentController == null)
@@ -116,6 +118,7 @@ public class GameSession : MonoBehaviour
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return;
             }
+
             opponents[opponentEndpoint] = opponentController;
         }
         else
@@ -126,7 +129,6 @@ public class GameSession : MonoBehaviour
     }
     
 
-   
     // Server
     private async Task ReceivePositions()
     {
@@ -138,14 +140,14 @@ public class GameSession : MonoBehaviour
             {
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
-
-                if (fromEndpoint.Equals(serverEndpointUDP))
+                
+                if (fromEndpoint.Equals(serverEndpointUDP)) 
                     continue;
 
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
                 Debug.Log($"Received position from {fromEndpoint}");
-
-                if (!IsValidJson(receivedJson))
+                
+                if (!IsValidJson(receivedJson)) 
                 {
                     Debug.LogWarning("Invalid JSON format received, skipping packet.");
                     continue;
@@ -157,48 +159,50 @@ public class GameSession : MonoBehaviour
                     Debug.LogWarning("Parsed playerState is null, skipping update.");
                     continue;
                 }
-
+                
                 EnsureOpponentServer(fromEndpoint, playerState.position, playerState.size);
-                BroadcastOpponentStates();
+                BroadcastOpponentStates(); 
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}"); 
             }
 
             await Task.Yield(); // Yield back to the main loop
         }
     }
-
+    
+   
     private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         if (!finishedLoading) return;
-
+        
         if (opponentEndpoint.Equals(serverEndpointUDP))
         {
             Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
             return;
         }
-
+        
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
 
-            if (opponentController == null)
+            if (opponentController == null) 
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
-                return;
+                return; 
             }
+
             opponents[opponentEndpoint] = opponentController;
         }
         else if (opponentController != null)
         {
-            opponentController.UpdatePosition(position, size); // WARNING
+            opponentController.UpdatePosition(position, size);
         }
     }
-
-    // Server
+    
+    //Server
     private void BroadcastOpponentStates()
     {
         foreach (var opponent in opponents)
@@ -211,17 +215,21 @@ public class GameSession : MonoBehaviour
 
             Debug.Log("Broadcasting opponent state to all clients");
 
-            // Send opponent state to all clients
-            foreach (var clientEndpoint in clients) // Send to all connected clients
+            // Send opponent state to all opponents' UDP endpoints
+            foreach (var opponentEntry in opponents)
             {
-                if (clientEndpoint != opponent.Key) // Don't send to the sender
+                var opponentEndpoint = opponentEntry.Key; // IPEndPoint of the opponent
+
+                // Check if the opponentEntry is valid before sending
+                if (opponentEndpoint != null)
                 {
-                    udpClient.SendAsync(bytes, bytes.Length, clientEndpoint);
-                    Debug.Log($"Sent state to {clientEndpoint}");
+                    udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
+                    Debug.Log($"Sent state to {opponentEndpoint}");
                 }
             }
         }
     }
+
 
 
     public static void HostGame()
@@ -319,7 +327,7 @@ public class GameSession : MonoBehaviour
         yield return null;
     }
 
-    private static IPEndPoint GetIPEndPoint(string hostName, int port)
+    public static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
         var addresses = Dns.GetHostAddresses(hostName);
         var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork);
