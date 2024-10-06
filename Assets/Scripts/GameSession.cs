@@ -97,8 +97,7 @@ public class GameSession : MonoBehaviour
             }
 
             Debug.Log("Client received opponent update");
-            if(opponents.Count > 0)
-                EnsureOpponentClient(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
+            EnsureOpponentClient(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
         }
         catch (Exception ex)
         {
@@ -134,7 +133,12 @@ public class GameSession : MonoBehaviour
             Debug.LogWarning($"OpponentController for {opponentEndpoint} is null, unable to update.");
         }
     }
+
+
+
+
     
+
     // Server
     private async Task ReceivePositions()
     {
@@ -169,11 +173,8 @@ public class GameSession : MonoBehaviour
                 }
 
                 // Ensure the opponent's state is updated, except for the host
-                if (opponents.Count > 0)
-                {
-                    EnsureOpponentServer(fromEndpoint, playerState.position, playerState.size);
-                    BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
-                }
+                EnsureOpponentServer(fromEndpoint, playerState.position, playerState.size);
+                BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
             }
             catch (Exception ex)
             {
