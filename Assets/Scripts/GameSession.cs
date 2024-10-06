@@ -81,6 +81,7 @@ public class GameSession : MonoBehaviour
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
 
+                // Skip processing if it's from the server's own UDP endpoint
                 if (fromEndpoint.Equals(serverEndpointUDP)) 
                     continue;
 
@@ -102,8 +103,16 @@ public class GameSession : MonoBehaviour
                         continue;
                     }
 
-                    EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                    BroadcastOpponentStates();
+                    // Update existing opponent without spawning new ones
+                    if (opponents.TryGetValue(fromEndpoint, out var opponentController) && opponentController != null)
+                    {
+                        opponentController.UpdatePosition(playerState.position, playerState.size);
+                        BroadcastOpponentStates();
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"No opponent found for endpoint {fromEndpoint}; skipping update.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -118,6 +127,7 @@ public class GameSession : MonoBehaviour
             await Task.Yield();
         }
     }
+
 
 
 // Helper function to validate JSON format. Found this to fix all errors in ReceivePositions
@@ -193,7 +203,7 @@ public class GameSession : MonoBehaviour
 
             foreach (var client in clients)
             {
-                if (client != null)
+                if (client != null && !client.Equals(serverEndpointUDP)) // Avoid sending to server itself
                 {
                     udpClient.SendAsync(bytes, bytes.Length, client);
                     Debug.Log($"Sent opponent state to {client}");
@@ -201,6 +211,7 @@ public class GameSession : MonoBehaviour
             }
         }
     }
+
 
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
@@ -280,7 +291,7 @@ public class GameSession : MonoBehaviour
             {
                 clients.Add(clientEndpoint);
 
-                // Check if opponent for this client already exists
+                // Only spawn if opponent does not already exist
                 if (!opponents.ContainsKey(clientEndpoint))
                 {
                     Debug.Log($"Spawning new opponent for client {clientEndpoint}");
@@ -304,6 +315,7 @@ public class GameSession : MonoBehaviour
             yield return null;
         }
     }
+
 
 
     private void SendHostStateToClient(IPEndPoint clientEndpoint)
