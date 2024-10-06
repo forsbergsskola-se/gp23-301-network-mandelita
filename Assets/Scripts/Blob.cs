@@ -1,4 +1,6 @@
 
+using System;
+using System.Net;
 using UnityEngine;
 
 public class Blob : MonoBehaviour
@@ -52,6 +54,8 @@ public class Blob : MonoBehaviour
     {
         Size += opponent.Size; 
         opponent.Size = 1f; 
+        
         opponent.transform.position = new Vector3(0f, 0f, 0f);
+        opponent.GetComponent<Blob>().Size = 1f; 
     }
 }

@@ -25,7 +25,7 @@ public class GameSession : MonoBehaviour
     #endregion
 
     #region ------ Server -------
-    private Dictionary<IPEndPoint, OpponentController> opponents = new();
+    public Dictionary<IPEndPoint, OpponentController> opponents = new();
     private List<IPEndPoint> clients = new();
     private TcpListener tcpListener;
     private bool udpReady;
@@ -341,7 +341,7 @@ public class GameSession : MonoBehaviour
         yield return null;
     }
 
-    private static IPEndPoint GetIPEndPoint(string hostName, int port)
+    public static IPEndPoint GetIPEndPoint(string hostName, int port)
     {
         var addresses = Dns.GetHostAddresses(hostName);
         var ip = addresses.FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork);

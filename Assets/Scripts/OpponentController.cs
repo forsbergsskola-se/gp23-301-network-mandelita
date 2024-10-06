@@ -12,7 +12,15 @@ public class OpponentController : MonoBehaviour
 
     public void UpdatePosition(Vector3 newPosition, float newSize)
     {
-        transform.position = newPosition;
-        _blob.Size = newSize; // Update the blob size
+        if (_blob != null)
+        {
+            transform.position = newPosition;
+            _blob.Size = newSize;
+        }
+        else
+        {
+            Debug.LogWarning("Blob component is null, cannot update position or size.");
+        }
     }
+
 }
