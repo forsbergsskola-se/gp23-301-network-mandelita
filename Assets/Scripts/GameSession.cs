@@ -81,15 +81,13 @@ public class GameSession : MonoBehaviour
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
 
-                // Skip processing packets from the server itself
                 if (fromEndpoint.Equals(serverEndpointUDP)) 
                     continue;
 
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-                Debug.Log($"Received position");
+                Debug.Log($"Received position from {fromEndpoint}");
 
-                // Validate JSON format before deserialization
-                if (!IsValidJson(receivedJson)) 
+                if (!IsValidJson(receivedJson))
                 {
                     Debug.LogWarning("Invalid JSON format received, skipping packet.");
                     continue;
@@ -98,6 +96,12 @@ public class GameSession : MonoBehaviour
                 try
                 {
                     var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                    if (playerState == null)
+                    {
+                        Debug.LogWarning("Parsed player state is null, skipping update.");
+                        continue;
+                    }
+
                     EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
                     BroadcastOpponentStates();
                 }
@@ -111,9 +115,10 @@ public class GameSession : MonoBehaviour
                 Debug.LogError($"Error receiving UDP packets: {ex.Message}");
             }
 
-            await Task.Yield(); // Yield back to the main loop
+            await Task.Yield();
         }
     }
+
 
 // Helper function to validate JSON format. Found this to fix all errors in ReceivePositions
     private bool IsValidJson(string json)
@@ -203,7 +208,7 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
 
-            // Avoid spawning opponent for host's own endpoint
+            // Avoid spawning for the host's own endpoint
             if (opponentEndpoint.Equals(serverEndpointUDP))
             {
                 Debug.Log("Skipping spawn for host’s own endpoint.");
@@ -213,14 +218,20 @@ public class GameSession : MonoBehaviour
             opponentController = SpawnOpponent();
             opponents[opponentEndpoint] = opponentController;
         }
+
+        // Check if the opponentController or its GameObject is destroyed before updating
+        if (opponentController != null && opponentController.gameObject != null)
+        {
+            Debug.Log($"Updating position for {opponentEndpoint}");
+            opponentController.UpdatePosition(position, size);
+        }
         else
         {
-            Debug.Log($"Opponent already exists for {opponentEndpoint}, updating position and size.");
+            Debug.LogWarning($"Opponent for {opponentEndpoint} has been destroyed or is null.");
+            opponents.Remove(opponentEndpoint); // Remove invalid or destroyed references
         }
-
-        // Update the opponent's position and size
-        opponentController?.UpdatePosition(position, size);
     }
+
 
 
     public static void HostGame()
