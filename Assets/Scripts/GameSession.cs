@@ -124,7 +124,7 @@ public class GameSession : MonoBehaviour
         else
         {
             // Only update if the opponentController is not null
-            Debug.Log($"Updating opponent at {opponentEndpoint} to position: {position}, size: {size}");
+            Debug.Log($"Updating opponent for {opponentEndpoint}");
             opponentController.UpdatePosition(position, size);
         }
     }
@@ -141,15 +141,13 @@ public class GameSession : MonoBehaviour
             {
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
-
-                // Skip processing packets from the server itself
+                
                 if (fromEndpoint.Equals(serverEndpointUDP)) 
                     continue;
 
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
                 Debug.Log($"Received position from {fromEndpoint}");
-
-                // Validate JSON format before deserialization
+                
                 if (!IsValidJson(receivedJson)) 
                 {
                     Debug.LogWarning("Invalid JSON format received, skipping packet.");
@@ -179,37 +177,33 @@ public class GameSession : MonoBehaviour
    
     private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
-        // Only spawn opponent if the game has finished loading
         if (!finishedLoading)
         {
             Debug.Log("Game is not finished loading. Opponent will not be spawned yet.");
             return;
         }
-
-        // Skip spawning for the host's own opponentEndpoint to avoid duplicates
+        
         if (opponentEndpoint.Equals(serverEndpointUDP))
         {
             Debug.Log("Skipping spawn for host’s own opponentEndpoint.");
             return;
         }
-
-        // Check if the opponent already exists; if not, spawn a new one
+        
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
 
-            if (opponentController == null) // Check if opponentController is null
+            if (opponentController == null) 
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
-                return; // Exit if spawning failed
+                return; 
             }
 
             opponents[opponentEndpoint] = opponentController;
         }
         else if (opponentController != null)
         {
-            // Update the opponent's position and size only if the controller is not null
             opponentController.UpdatePosition(position, size);
         }
     }
@@ -233,7 +227,7 @@ public class GameSession : MonoBehaviour
                 var opponentEndpoint = opponentEntry.Key; // IPEndPoint of the opponent
 
                 // Check if the opponentEntry is valid before sending
-                if (opponentEndpoint != null && opponentEndpoint != serverEndpointUDP)
+                if (opponentEndpoint != null)
                 {
                     udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
                     Debug.Log($"Sent opponent state to {opponentEndpoint}");
