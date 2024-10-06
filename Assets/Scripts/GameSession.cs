@@ -112,19 +112,28 @@ public class GameSession : MonoBehaviour
         {
             Debug.Log($"Spawning new opponent for {opponentEndpoint}");
             opponentController = SpawnOpponent();
-        
+    
             if (opponentController == null) // Check if opponentController is null
             {
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return; // Exit if spawning failed
             }
-        
+    
             opponents[opponentEndpoint] = opponentController;
         }
-
-        // Update the opponent's position and size
-        opponentController.UpdatePosition(position, size);
+    
+        // Log the opponentController details for debugging
+        if (opponentController != null)
+        {
+            Debug.Log($"Updating opponent at {opponentEndpoint} to position: {position}, size: {size}");
+            opponentController.UpdatePosition(position, size);
+        }
+        else
+        {
+            Debug.LogWarning($"OpponentController for {opponentEndpoint} is null, unable to update.");
+        }
     }
+
 
 
 
@@ -236,7 +245,7 @@ public class GameSession : MonoBehaviour
                 var opponentEndpoint = opponentEntry.Key; // IPEndPoint of the opponent
 
                 // Check if the opponentEntry is valid before sending
-                if (opponentEndpoint != null && opponentEndpoint != serverEndpointUDP) // Don't send to the host
+                if (opponentEndpoint != null && opponentEndpoint != serverEndpointUDP)
                 {
                     udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
                     Debug.Log($"Sent opponent state to {opponentEndpoint}");
