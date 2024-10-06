@@ -86,7 +86,7 @@ public class GameSession : MonoBehaviour
                     continue;
 
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-                Debug.Log($"Received position from {fromEndpoint}: {receivedJson}");
+                Debug.Log($"Received position");
 
                 // Validate JSON format before deserialization
                 if (!IsValidJson(receivedJson)) 
@@ -136,21 +136,43 @@ public class GameSession : MonoBehaviour
 
     private async Task ReceiveOpponentUpdates()
     {
-        try
+        while (true)
         {
-            var receiveResult = await udpClient.ReceiveAsync();
-            var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-            var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
+            try
+            {
+                var receiveResult = await udpClient.ReceiveAsync();
+                var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+            
+                // Validate and parse JSON data
+                if (!IsValidJson(receivedJson))
+                {
+                    Debug.LogWarning("Invalid JSON received for opponent update.");
+                    continue;
+                }
+            
+                var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                Debug.Log("Client received opponent update");
 
-            Debug.Log("Client received opponent update");
+                // Ensure an opponent is spawned or updated
+                var opponentEndpoint = receiveResult.RemoteEndPoint;
+                if (!opponents.ContainsKey(opponentEndpoint))
+                {
+                    Debug.Log($"Spawning new opponent on client for {opponentEndpoint}");
+                    opponents[opponentEndpoint] = SpawnOpponent();
+                }
 
-            EnsureOpponentAndUpdatePosition(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+                // Update the opponent's position and size
+                opponents[opponentEndpoint]?.UpdatePosition(opponentState.position, opponentState.size);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error receiving opponent update: {ex.Message}");
+            }
+
+            await Task.Yield(); // Yield to prevent blocking
         }
     }
+
 
     private void BroadcastOpponentStates()
     {
