@@ -57,12 +57,9 @@ public class GameSession : MonoBehaviour
         var stateJson = JsonUtility.ToJson(state);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
 
-        Debug.Log("Client sending position update...");
-
         try
         {
             await udpClient.SendAsync(bytes, bytes.Length, serverEndpointUDP);
-            Debug.Log("Client sent position!");
         }
         catch (Exception ex)
         {
@@ -72,8 +69,6 @@ public class GameSession : MonoBehaviour
 
     private async Task ReceivePositions()
     {
-        Debug.Log("Server listening for positions...");
-
         while (true)
         {
             try
@@ -81,49 +76,24 @@ public class GameSession : MonoBehaviour
                 var receiveResult = await udpClient.ReceiveAsync();
                 var fromEndpoint = receiveResult.RemoteEndPoint;
 
-                // Skip processing if it's from the server's own UDP endpoint
-                if (fromEndpoint.Equals(serverEndpointUDP)) 
-                    continue;
+                if (fromEndpoint.Equals(serverEndpointUDP)) continue;
 
                 var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-                Debug.Log($"Received position from {fromEndpoint}");
+                if (!IsValidJson(receivedJson)) continue;
 
-                if (!IsValidJson(receivedJson))
-                {
-                    Debug.LogWarning("Invalid JSON format received, skipping packet.");
-                    continue;
-                }
+                var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                if (playerState == null) continue;
 
-                try
+                if (opponents.TryGetValue(fromEndpoint, out var opponentController) && opponentController != null)
                 {
-                    var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                    if (playerState == null)
-                    {
-                        Debug.LogWarning("Parsed player state is null, skipping update.");
-                        continue;
-                    }
-
-                    // Update existing opponent without spawning new ones
-                    if (opponents.TryGetValue(fromEndpoint, out var opponentController) && opponentController != null)
-                    {
-                        opponentController.UpdatePosition(playerState.position, playerState.size);
-                        BroadcastOpponentStates();
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"No opponent found for endpoint {fromEndpoint}; skipping update.");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error parsing JSON: {ex.Message}");
+                    opponentController.UpdatePosition(playerState.position, playerState.size);
+                    BroadcastOpponentStates();
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogError($"Error receiving UDP packets: {ex.Message}");
             }
-
             await Task.Yield();
         }
     }
@@ -151,41 +121,28 @@ public class GameSession : MonoBehaviour
 
     private async Task ReceiveOpponentUpdates()
     {
-        while (true)
+        try
         {
-            try
+            var receiveResult = await udpClient.ReceiveAsync();
+            var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+            if (!IsValidJson(receivedJson)) return;
+
+            var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
+            var opponentEndpoint = receiveResult.RemoteEndPoint;
+
+            if (!opponents.ContainsKey(opponentEndpoint))
             {
-                var receiveResult = await udpClient.ReceiveAsync();
-                var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-            
-                // Validate and parse JSON data
-                if (!IsValidJson(receivedJson))
-                {
-                    Debug.LogWarning("Invalid JSON received for opponent update.");
-                    continue;
-                }
-            
-                var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                Debug.Log("Client received opponent update");
-
-                // Ensure an opponent is spawned or updated
-                var opponentEndpoint = receiveResult.RemoteEndPoint;
-                if (!opponents.ContainsKey(opponentEndpoint))
-                {
-                    Debug.Log($"Spawning new opponent on client for {opponentEndpoint}");
-                    opponents[opponentEndpoint] = SpawnOpponent();
-                }
-
-                // Update the opponent's position and size
-                opponents[opponentEndpoint]?.UpdatePosition(opponentState.position, opponentState.size);
+                opponents[opponentEndpoint] = SpawnOpponent();
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error receiving opponent update: {ex.Message}");
-            }
-
-            await Task.Yield(); // Yield to prevent blocking
+            opponents[opponentEndpoint]?.UpdatePosition(opponentState.position, opponentState.size);
         }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error receiving opponent update: {ex.Message}");
+        }
+
+        await Task.Yield();
     }
 
 
@@ -193,57 +150,21 @@ public class GameSession : MonoBehaviour
     {
         foreach (var opponent in opponents)
         {
-            if (opponent.Value == null) continue; // Ensure the opponent is still valid
+            if (opponent.Value == null) continue;
 
             var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
             var stateJson = JsonUtility.ToJson(state);
             var bytes = Encoding.UTF8.GetBytes(stateJson);
 
-            Debug.Log("Broadcasting opponent state to all clients");
-
             foreach (var client in clients)
             {
-                if (client != null && !client.Equals(serverEndpointUDP)) // Avoid sending to server itself
+                if (client != null && !client.Equals(serverEndpointUDP))
                 {
                     udpClient.SendAsync(bytes, bytes.Length, client);
-                    Debug.Log($"Sent opponent state to {client}");
                 }
             }
         }
     }
-
-
-    private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
-    {
-        if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
-        {
-            Debug.Log($"Spawning new opponent for {opponentEndpoint}");
-
-            // Avoid spawning for the host's own endpoint
-            if (opponentEndpoint.Equals(serverEndpointUDP))
-            {
-                Debug.Log("Skipping spawn for host’s own endpoint.");
-                return;
-            }
-
-            opponentController = SpawnOpponent();
-            opponents[opponentEndpoint] = opponentController;
-        }
-
-        // Check if the opponentController or its GameObject is destroyed before updating
-        if (opponentController != null && opponentController.gameObject != null)
-        {
-            Debug.Log($"Updating position for {opponentEndpoint}");
-            opponentController.UpdatePosition(position, size);
-        }
-        else
-        {
-            Debug.LogWarning($"Opponent for {opponentEndpoint} has been destroyed or is null.");
-            opponents.Remove(opponentEndpoint); // Remove invalid or destroyed references
-        }
-    }
-
-
 
     public static void HostGame()
     {
