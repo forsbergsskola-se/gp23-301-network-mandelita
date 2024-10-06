@@ -35,17 +35,18 @@ public class GameSession : MonoBehaviour
     {
         if (!finishedLoading || !udpReady) return;
 
-        if (!isServer)
+        if (!isServer) // Client
         {
             await SendPositionToServer();
             await ReceiveOpponentUpdates();
         }
-        else
+        else // server
         {
             await ReceivePositions();
         }
     }
 
+    //CLient
     private async Task SendPositionToServer()
     {
         if (!udpReady) return;
@@ -69,81 +70,29 @@ public class GameSession : MonoBehaviour
             Debug.LogError($"Error sending UDP packet: {ex.Message}");
         }
     }
-
-    private async Task ReceivePositions()
-    {
-        Debug.Log("Server listening for positions...");
-
-        while (true)
-        {
-            try
-            {
-                var receiveResult = await udpClient.ReceiveAsync();
-                var fromEndpoint = receiveResult.RemoteEndPoint;
-
-                // Skip processing packets from the server itself
-                if (fromEndpoint.Equals(serverEndpointUDP)) 
-                    continue;
-
-                var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-                Debug.Log($"Received position");
-
-                // Validate JSON format before deserialization
-                if (!IsValidJson(receivedJson)) 
-                {
-                    Debug.LogWarning("Invalid JSON format received, skipping packet.");
-                    continue;
-                }
-
-                try
-                {
-                    var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                    EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                    BroadcastOpponentStates();
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"Error parsing JSON: {ex.Message}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
-            }
-
-            await Task.Yield(); // Yield back to the main loop
-        }
-    }
-
-// Helper function to validate JSON format. Found this to fix all errors in ReceivePositions
-    private bool IsValidJson(string json)
-    {
-        json = json.Trim();
-        if ((json.StartsWith("{") && json.EndsWith("}")) || (json.StartsWith("[") && json.EndsWith("]")))
-        {
-            try
-            {
-                var obj = JsonUtility.FromJson<PlayerState>(json);
-                return obj != null;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        return false;
-    }
-
+    
     private async Task ReceiveOpponentUpdates()
     {
         try
         {
             var receiveResult = await udpClient.ReceiveAsync();
             var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+
+            // Validate JSON format before deserialization
+            if (!IsValidJson(receivedJson)) 
+            {
+                Debug.LogWarning("Invalid JSON format received, skipping packet.");
+                return;
+            }
+
             var opponentState = JsonUtility.FromJson<PlayerState>(receivedJson);
+            if (opponentState == null)
+            {
+                Debug.LogWarning("Parsed opponentState is null, skipping update.");
+                return;
+            }
 
             Debug.Log("Client received opponent update");
-
             EnsureOpponentAndUpdatePosition(receiveResult.RemoteEndPoint, opponentState.position, opponentState.size);
         }
         catch (Exception ex)
@@ -152,29 +101,7 @@ public class GameSession : MonoBehaviour
         }
     }
 
-    private void BroadcastOpponentStates()
-    {
-        foreach (var opponent in opponents)
-        {
-            if (opponent.Value == null) continue; // Ensure the opponent is still valid
-
-            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
-            var stateJson = JsonUtility.ToJson(state);
-            var bytes = Encoding.UTF8.GetBytes(stateJson);
-
-            Debug.Log("Broadcasting opponent state to all clients");
-
-            foreach (var client in clients)
-            {
-                if (client != null)
-                {
-                    udpClient.SendAsync(bytes, bytes.Length, client);
-                    Debug.Log($"Sent opponent state to {client}");
-                }
-            }
-        }
-    }
-
+    // Client
     private void EnsureOpponentAndUpdatePosition(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
         // Only spawn opponent if the game has finished loading
@@ -213,6 +140,75 @@ public class GameSession : MonoBehaviour
         }
     }
 
+    
+    // Server
+    private async Task ReceivePositions()
+    {
+        Debug.Log("Server listening for positions...");
+
+        while (true)
+        {
+            try
+            {
+                var receiveResult = await udpClient.ReceiveAsync();
+                var fromEndpoint = receiveResult.RemoteEndPoint;
+
+                // Skip processing packets from the server itself
+                if (fromEndpoint.Equals(serverEndpointUDP)) 
+                    continue;
+
+                var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+                Debug.Log($"Received position from {fromEndpoint}");
+
+                // Validate JSON format before deserialization
+                if (!IsValidJson(receivedJson)) 
+                {
+                    Debug.LogWarning("Invalid JSON format received, skipping packet.");
+                    continue;
+                }
+
+                var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+                if (playerState == null)
+                {
+                    Debug.LogWarning("Parsed playerState is null, skipping update.");
+                    continue;
+                }
+
+                EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+                BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+            }
+
+            await Task.Yield(); // Yield back to the main loop
+        }
+    }
+
+    //Server
+    private void BroadcastOpponentStates()
+    {
+        foreach (var opponent in opponents)
+        {
+            if (opponent.Value == null) continue; // Ensure the opponent is still valid
+
+            var state = new PlayerState(opponent.Value.transform.position, opponent.Value.GetComponent<Blob>().Size);
+            var stateJson = JsonUtility.ToJson(state);
+            var bytes = Encoding.UTF8.GetBytes(stateJson);
+
+            Debug.Log("Broadcasting opponent state to all clients");
+
+            foreach (var client in clients)
+            {
+                if (client != null)
+                {
+                    udpClient.SendAsync(bytes, bytes.Length, client);
+                    Debug.Log($"Sent opponent state to {client}");
+                }
+            }
+        }
+    }
 
     public static void HostGame()
     {
@@ -373,5 +369,24 @@ public class GameSession : MonoBehaviour
             position = pos;
             size = sz;
         }
+    }
+    
+    // Helper function to validate JSON format. Found this to fix all errors in ReceivePositions
+    private bool IsValidJson(string json)
+    {
+        json = json.Trim();
+        if ((json.StartsWith("{") && json.EndsWith("}")) || (json.StartsWith("[") && json.EndsWith("]")))
+        {
+            try
+            {
+                var obj = JsonUtility.FromJson<PlayerState>(json);
+                return obj != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+        return false;
     }
 }
