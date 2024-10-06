@@ -38,6 +38,7 @@ public class GameSession : MonoBehaviour
         if (!isServer) // Client
         {
             await SendPositionToServer();
+            Debug.Log("Call ReceiveOpponentUpdates");
             await ReceiveOpponentUpdates();
         }
         else // Server
@@ -74,6 +75,7 @@ public class GameSession : MonoBehaviour
     // Client
     private async Task ReceiveOpponentUpdates()
     {
+        if (!udpReady) return;
         try
         {
             var receiveResult = await udpClient.ReceiveAsync();
@@ -106,7 +108,7 @@ public class GameSession : MonoBehaviour
         // Check if the opponent already exists; if not, spawn a new one
         if (!opponents.TryGetValue(opponentEndpoint, out var opponentController))
         {
-            Debug.Log($"Spawning new opponent for {opponentEndpoint}");
+            Debug.Log($"Spawning new opponent for {opponentEndpoint}"); // NOT HAPPENING
             opponentController = SpawnOpponent();
 
             if (opponentController == null)
@@ -114,10 +116,6 @@ public class GameSession : MonoBehaviour
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return;
             }
-
-            // Set the opponent's initial position and size
-            //opponentController.transform.position = position;
-            //opponentController.GetComponent<Blob>().Size = size;
             opponents[opponentEndpoint] = opponentController;
         }
         else
@@ -174,11 +172,7 @@ public class GameSession : MonoBehaviour
 
     private void EnsureOpponentServer(IPEndPoint opponentEndpoint, Vector3 position, float size)
     {
-        if (!finishedLoading)
-        {
-            Debug.Log("Game is not finished loading. Opponent will not be spawned yet.");
-            return;
-        }
+        if (!finishedLoading) return;
 
         if (opponentEndpoint.Equals(serverEndpointUDP))
         {
@@ -196,15 +190,11 @@ public class GameSession : MonoBehaviour
                 Debug.LogError($"Failed to spawn opponent for {opponentEndpoint}");
                 return;
             }
-
-            // Set the opponent's initial position and size
-            //opponentController.transform.position = position;
-            //opponentController.GetComponent<Blob>().Size = size;
             opponents[opponentEndpoint] = opponentController;
         }
         else if (opponentController != null)
         {
-            opponentController.UpdatePosition(position, size);
+            opponentController.UpdatePosition(position, size); // WARNING
         }
     }
 
