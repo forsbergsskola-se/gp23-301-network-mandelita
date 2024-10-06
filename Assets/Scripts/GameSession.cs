@@ -229,8 +229,11 @@ public class GameSession : MonoBehaviour
                 // Check if the opponentEntry is valid before sending
                 if (opponentEndpoint != null)
                 {
-                    udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
-                    Debug.Log($"Sent opponent state to {opponentEndpoint}");
+                    if (!opponentEndpoint.Equals(serverEndpointUDP)) 
+                    {
+                        udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
+                        Debug.Log($"Sent state to {opponentEndpoint}");
+                    }
                 }
             }
         }
