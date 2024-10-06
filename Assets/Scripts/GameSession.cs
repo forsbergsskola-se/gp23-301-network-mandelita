@@ -35,9 +35,6 @@ public class GameSession : MonoBehaviour
     {
         if (!finishedLoading || !udpReady) return;
         
-        Debug.Log("Client count: " + clients.Count);
-        Debug.Log("OpponentsCount: " + opponents.Count);
-        
         if (!isServer) // Client
         {
             await SendPositionToServer();
@@ -49,8 +46,7 @@ public class GameSession : MonoBehaviour
         }
     }
 
-    
-     // Client
+    //Client
     private async Task SendPositionToServer()
     {
         if (!udpReady) return;
@@ -233,7 +229,7 @@ public class GameSession : MonoBehaviour
             // Send opponent state to all clients
             foreach (var clientEndpoint in clients) // Send to all connected clients
             {
-                if (clientEndpoint != opponent.Key) // Ensure you're not sending to yourself
+                if (clientEndpoint != opponent.Key) // Don't send to the sender
                 {
                     udpClient.SendAsync(bytes, bytes.Length, clientEndpoint);
                     Debug.Log($"Sent state to {clientEndpoint}");
