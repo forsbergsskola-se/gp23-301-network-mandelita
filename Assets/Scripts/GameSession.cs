@@ -116,8 +116,8 @@ public class GameSession : MonoBehaviour
             }
 
             // Set the opponent's initial position and size
-            opponentController.transform.position = position;
-            opponentController.GetComponent<Blob>().Size = size;
+            //opponentController.transform.position = position;
+            //opponentController.GetComponent<Blob>().Size = size;
             opponents[opponentEndpoint] = opponentController;
         }
         else
@@ -198,8 +198,8 @@ public class GameSession : MonoBehaviour
             }
 
             // Set the opponent's initial position and size
-            opponentController.transform.position = position;
-            opponentController.GetComponent<Blob>().Size = size;
+            //opponentController.transform.position = position;
+            //opponentController.GetComponent<Blob>().Size = size;
             opponents[opponentEndpoint] = opponentController;
         }
         else if (opponentController != null)
