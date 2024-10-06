@@ -35,6 +35,11 @@ public class GameSession : MonoBehaviour
     {
         if (!finishedLoading || !udpReady) return;
 
+        Debug.Log("Server endopointUDP: " + serverEndpointUDP);
+        Debug.Log("Server endopointUDP: " + serverEndpointTCP);
+        Debug.Log("Client count: " + clients.Count);
+        Debug.Log("OpponentsCount: " + opponents.Count);
+        
         if (!isServer) // Client
         {
             await SendPositionToServer();
@@ -44,10 +49,6 @@ public class GameSession : MonoBehaviour
         {
             await ReceivePositions();
         }
-        
-        Debug.Log("Server endopointUDP: " + serverEndpointUDP);
-        Debug.Log("Server endopointUDP: " + serverEndpointTCP);
-        Debug.Log("Client count: " + clients.Count);
     }
 
     //Client
@@ -210,16 +211,21 @@ public class GameSession : MonoBehaviour
 
             Debug.Log("Broadcasting opponent state to all clients");
 
-            foreach (var client in clients)
+            // Send opponent state to all opponents' UDP endpoints
+            foreach (var opponentEntry in opponents)
             {
-                if (client != null)
+                var opponentEndpoint = opponentEntry.Key; // IPEndPoint of the opponent
+
+                // Check if the opponentEntry is valid before sending
+                if (opponentEndpoint != null && opponentEndpoint != serverEndpointUDP) // Don't send to the host
                 {
-                    udpClient.SendAsync(bytes, bytes.Length, client);
-                    Debug.Log($"Sent opponent state to {client}");
+                    udpClient.SendAsync(bytes, bytes.Length, opponentEndpoint);
+                    Debug.Log($"Sent opponent state to {opponentEndpoint}");
                 }
             }
         }
     }
+
 
     public static void HostGame()
     {
