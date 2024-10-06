@@ -44,6 +44,10 @@ public class GameSession : MonoBehaviour
         {
             await ReceivePositions();
         }
+        
+        Debug.Log("Server endopointUDP: " + serverEndpointUDP);
+        Debug.Log("Server endopointUDP: " + serverEndpointTCP);
+        Debug.Log("Client count: " + clients.Count);
     }
 
     //Client
