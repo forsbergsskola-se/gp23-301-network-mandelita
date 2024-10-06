@@ -79,11 +79,6 @@ public class GameSession : MonoBehaviour
             var receiveResult = await udpClient.ReceiveAsync();
             var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
 
-            if (receiveResult.RemoteEndPoint.Equals(serverEndpointUDP))
-            {
-                return;
-            }
-
             if (!IsValidJson(receivedJson))
             {
                 Debug.LogWarning("Invalid JSON format received, skipping packet.");
