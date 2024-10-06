@@ -46,7 +46,7 @@ public class GameSession : MonoBehaviour
         }
     }
 
-    //CLient
+    //Client
     private async Task SendPositionToServer()
     {
         if (!udpReady) return;
@@ -143,48 +143,50 @@ public class GameSession : MonoBehaviour
     
     // Server
     private async Task ReceivePositions()
+{
+    Debug.Log("Server listening for positions...");
+
+    while (true)
     {
-        Debug.Log("Server listening for positions...");
-
-        while (true)
+        try
         {
-            try
+            var receiveResult = await udpClient.ReceiveAsync();
+            var fromEndpoint = receiveResult.RemoteEndPoint;
+
+            // Skip processing packets from the server itself
+            if (fromEndpoint.Equals(serverEndpointUDP)) 
+                continue;
+
+            var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
+            Debug.Log($"Received position from {fromEndpoint}");
+
+            // Validate JSON format before deserialization
+            if (!IsValidJson(receivedJson)) 
             {
-                var receiveResult = await udpClient.ReceiveAsync();
-                var fromEndpoint = receiveResult.RemoteEndPoint;
-
-                // Skip processing packets from the server itself
-                if (fromEndpoint.Equals(serverEndpointUDP)) 
-                    continue;
-
-                var receivedJson = Encoding.UTF8.GetString(receiveResult.Buffer);
-                Debug.Log($"Received position from {fromEndpoint}");
-
-                // Validate JSON format before deserialization
-                if (!IsValidJson(receivedJson)) 
-                {
-                    Debug.LogWarning("Invalid JSON format received, skipping packet.");
-                    continue;
-                }
-
-                var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
-                if (playerState == null)
-                {
-                    Debug.LogWarning("Parsed playerState is null, skipping update.");
-                    continue;
-                }
-
-                EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
-                BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+                Debug.LogWarning("Invalid JSON format received, skipping packet.");
+                continue;
             }
 
-            await Task.Yield(); // Yield back to the main loop
+            var playerState = JsonUtility.FromJson<PlayerState>(receivedJson);
+            if (playerState == null)
+            {
+                Debug.LogWarning("Parsed playerState is null, skipping update.");
+                continue;
+            }
+
+            // Ensure the opponent's state is updated, except for the host
+            EnsureOpponentAndUpdatePosition(fromEndpoint, playerState.position, playerState.size);
+            BroadcastOpponentStates(); // Broadcasting opponent states after processing updates
         }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error receiving UDP packets: {ex.Message}");
+        }
+
+        await Task.Yield(); // Yield back to the main loop
     }
+}
+
 
     //Server
     private void BroadcastOpponentStates()
@@ -258,7 +260,7 @@ public class GameSession : MonoBehaviour
             {
                 var newOpponent = SpawnOpponent();
                 opponents[clientEndpoint] = newOpponent;
-                SendHostStateToClient(clientEndpoint);
+                SendHostStateToClients();
                 Debug.Log($"Opponent spawned for {clientEndpoint}");
             }
             else
@@ -271,15 +273,21 @@ public class GameSession : MonoBehaviour
     }
 
 
-    private void SendHostStateToClient(IPEndPoint clientEndpoint)
+    private async Task SendHostStateToClients()
     {
         var hostState = new PlayerState(playerController.transform.position, playerController.GetComponent<Blob>().Size);
         var stateJson = JsonUtility.ToJson(hostState);
         var bytes = Encoding.UTF8.GetBytes(stateJson);
 
-        // Send the host's state to the newly connected client
-        udpClient.SendAsync(bytes, bytes.Length, clientEndpoint);
-        Debug.Log($"Sent host state to {clientEndpoint}: {stateJson}");
+        // Send the host's state to all clients
+        foreach (var client in clients)
+        {
+            if (client != null)
+            {
+                await udpClient.SendAsync(bytes, bytes.Length, client);
+                Debug.Log($"Sent host state to {client}: {stateJson}");
+            }
+        }
     }
 
     private IEnumerator Co_LaunchGame()
